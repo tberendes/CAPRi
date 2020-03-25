@@ -41,10 +41,10 @@ def process_file(filename):
 
             atimeNearestApproach = nc.variables['atimeNearestApproach'][:]
             GR_Z = nc.variables['GR_Z'][:]  # elevAngle 	fpdim
-            GR_Z_StDev = nc.variables['GR_Z_StDev'][:] # elevAngle 	fpdim
+            GR_Z_StdDev = nc.variables['GR_Z_StdDev'][:] # elevAngle 	fpdim
             GR_Z_Max = nc.variables['GR_Z_Max'][:]  # elevAngle 	fpdim
-            zFactorMeasured = nc.variables['zFactorMeasured'][:]  # elevAngle 	fpdim
-            zFactorCorrected =  nc.variables['zFactorCorrected'][:] # elevAngle 	fpdim
+            ZFactorMeasured = nc.variables['ZFactorMeasured'][:]  # elevAngle 	fpdim
+            ZFactorCorrected =  nc.variables['ZFactorCorrected'][:] # elevAngle 	fpdim
             GR_RC_rainrate = nc.variables['GR_RC_rainrate'][:]  # elevAngle 	fpdim
             GR_RC_rainrate_StdDev = nc.variables['GR_RC_rainrate_StdDev'][:]   # elevAngle 	fpdim
             GR_RC_rainrate_Max =  nc.variables['GR_RC_rainrate_Max'][:]  # elevAngle 	fpdim
@@ -65,7 +65,6 @@ def process_file(filename):
             PrecipRateSurface =  nc.variables['PrecipRateSurface'][:]  # fpdim
             SurfPrecipTotRate =  nc.variables['SurfPrecipTotRate'][:]  # fpdim
             heightStormTop = nc.variables['heightStormTop'][:]   # fpdim
-            TypePrecip =  nc.variables['TypePrecip'][:]  # fpdim
             scanNum =  nc.variables['scanNum'][:]  # fpdim
             GR_Zdr =  nc.variables['GR_Zdr'][:]  # elevAngle 	fpdim
             GR_RHOhv = nc.variables['GR_RHOhv'][:]   # elevAngle 	fpdim
@@ -73,20 +72,22 @@ def process_file(filename):
             GR_Nw_StdDev = nc.variables['GR_Nw_StdDev'][:]   # elevAngle 	fpdim
             GR_Nw_Max = nc.variables['GR_Nw_Max'][:]   # elevAngle 	fpdim
             Nw =  nc.variables['Nw'][:]
-            elevAngle =  nc.variables['elevAngle'][:]  # fpdim
-            Bbheight =  nc.variables['Bbheight'][:]  # fpdim
+            elevationAngle =  nc.variables['elevationAngle'][:]  # fpdim
+            BBheight =  nc.variables['BBheight'][:]  # fpdim
+            BBstatus =  nc.variables['BBstatus'][:]  # fpdim
+            TypePrecip =  nc.variables['TypePrecip'][:]  # fpdim
 
             elevationAngle = GR_HID.shape[0]
             fpdim = GR_HID.shape[1]
             hidim = GR_HID.shape[2]
-            for fp in range(fpdim)-1:
-                print ('latitude '+latitude[fp] + ' longitude '+longitude[fp])
+            for fp in range(10):
+                print ('latitude '+str(latitude[0][fp]) + ' longitude '+str(longitude[0][fp]))
 #        print("district ", dist_id)
 #        print("mean precip ", districtPrecipStats[dist_id]['mean'])
 #        print("median precip ", districtPrecipStats[dist_id]['median'])
 
 #    print("finished file " + key)
-        nc.close()
+
     gz.close()
 
     # reformat new json structure
