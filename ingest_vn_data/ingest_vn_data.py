@@ -1,4 +1,5 @@
 import base64
+import gzip
 import string
 import json
 import random
@@ -14,7 +15,7 @@ s3 = boto3.resource(
 
 def lambda_handler(event, context):
 
-    print("event ", event)
+    #print("event ", event)
 
     if 'body' in event:
         try:
@@ -24,7 +25,7 @@ def lambda_handler(event, context):
                 message_bytes = base64.b64decode(event['body'])
                 message = message_bytes.decode('ascii')
                 event = json.loads(message)
-                print("decoded event ", event)
+                #print("decoded event ", event)
             else:
                 event = json.loads(event['body'])
         except (TypeError, ValueError):
@@ -66,13 +67,19 @@ def lambda_handler(event, context):
 #    outJson = {"request_id": request_id, "boundaries": districts}
 
 
-    with open("/tmp/test.json", 'w') as json_file:
-        json.dump(event, json_file)
-    #        json.dump(districtPrecipStats, json_file)
-    json_file.close()
+    random_id = ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(10))
 
-    s3.Bucket(data_bucket).upload_file("/tmp/test.json",
-                                       "test/test_upload.json")
+    #with open("/tmp/" + random_id + ".json", 'w') as json_file:
+        #json.dump(event, json_file)
+    #json_file.close()
+
+    with gzip.open("/tmp/" + random_id + ".json.gz", 'wb') as f:
+        s=json.dumps(event)
+        f.write(s.encode())
+    f.close()
+
+    s3.Bucket(data_bucket).upload_file("/tmp/"+ random_id + ".json.gz",
+                                       "ingest_vn/" + random_id + ".json.gz")
 
      # set a random jobID string for use in all subsequent processes
 #    return dict(statusCode='200', headers={'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
