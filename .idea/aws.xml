@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="accountSettings">
-    <option name="activeProfile" value="profile:GHRC" />
+    <option name="activeProfile" value="profile:CAPRI" />
     <option name="activeRegion" value="us-east-1" />
     <option name="recentlyUsedProfiles">
       <list>
+        <option value="profile:CAPRI" />
         <option value="profile:GHRC" />
         <option value="profile:CAPRi" />
         <option value="profile:default" />

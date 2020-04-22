@@ -29,6 +29,7 @@ import certifi
 import requests
 from io import BytesIO
 import random
+from json2parquet import load_json, ingest_data, write_parquet, write_parquet_dataset
 
 ingest_url = 'https://6inm6whnni.execute-api.us-east-1.amazonaws.com/default/ingest_vn_data'
 api_key = 'LakZ1uMrR465m1GQKoQhQ7Ig3bwr7wyPavUZ9mEc'
@@ -43,8 +44,14 @@ from datetime import date
 from datetime import timedelta
 from util.util import load_json_from_s3, update_status_on_s3
 
-s3 = boto3.resource(
-    's3')
+#s3 = boto3.resource(
+#    's3')
+
+session = boto3.Session(profile_name='CAPRI')
+# Any clients created from this session will use credentials
+# from the [CAPRI] section of ~/.aws/credentials.
+client = session.client('s3')
+
 http = urllib3.PoolManager(cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
 
 def zip_string(str_data: str) -> bytes:
@@ -158,6 +165,7 @@ def process_file(filename):
             else:
                 GPM_SENSOR = 'Unknown'
             GR_site = getattr(nc, 'GR_file').split('_')[0]
+            VN_filename = os.path.basename(filename)
 
             # pick variable with most dimensions to define loops
             elevations = nc.variables['GR_HID'].shape[0]
@@ -170,7 +178,7 @@ def process_file(filename):
                 for fp in range(fpdim-1):
                     # put in not varying values
                     fp_entry={"GPM_ver": GPM_VERSION, "VN_ver": vn_version, "scan": SCAN_TYPE, "sensor": GPM_SENSOR, "GR_site": GR_site,
-                              "time": closestTime, "elev":float(elevationAngle[elev])}
+                              "time": closestTime, "elev":float(elevationAngle[elev]), "vn_filename":VN_filename}
 
                     for fp_key in varDict_fpdim:
                         fp_entry[fp_key]=float(ma.getdata(varDict_fpdim[fp_key])[fp])
@@ -182,10 +190,10 @@ def process_file(filename):
                     #exit(0)
                     outputJson.append(fp_entry)
                     count = count + 1
-                    if count >= 10:
-                        break
-                if count >= 10:
-                    break
+                #     if count >= 10:
+                #         break
+                # if count >= 10:
+                #     break
 
     gz.close()
 
@@ -195,7 +203,57 @@ def process_file(filename):
 
 
 def main():
-    outputJson = process_file("/media/sf_berendes/capri_test_data/VN/2019/GRtoDPR.KEOX.190807.30913.V06A.DPR.NS.1_21.nc.gz")
+
+    # local_directory = '/media/sf_berendes/capri_test_data/VN/2019/'
+    # destination = 'Folder_name'  # S3 folder inside the bucket
+    # bucket = 'Bucket_name'
+    # client = boto3.client('s3')
+    # # enumerate local files recursively
+    # for root, dirs, files in os.walk(local_directory):
+    #     for filename in files:
+    #         # construct the full local path
+    #         local_path = os.path.join(root, filename)
+    #         # construct the full Dropbox path
+    #         relative_path = os.path.relpath(local_path, local_directory)
+    #         s3_path = os.path.join(destination, relative_path)
+    #         print('Searching "%s" in "%s"' % (s3_path, bucket))
+    #         try:
+    #             client.head_object(Bucket=bucket, Key=s3_path)
+    #             print("Path found on S3! Skipping %s..." % s3_path)
+    #         except:
+    #             print("Uploading %s..." % s3_path)
+    #             client.upload_file(local_path, bucket, s3_path)
+
+    VN_DIR = '/media/sf_berendes/capri_test_data/VN/mrms_geomatch/2019'
+    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet/2019'
+    s3_bucket = 'capri-data'
+    #client = boto3.client('s3')
+
+    for root, dirs, files in os.walk(VN_DIR, topdown=False):
+        for file in files:
+            print('file ' + file)
+            # only process zipped nc VN files
+            if file.endswith('.nc.gz'):
+                outputJson = process_file(os.path.join(root,file))
+                # look for image files with same base filename
+                # put deep learning images in S3
+                # put gzipped json VN file on S3 for indexing into Athena
+                parquet_data = ingest_data(outputJson)
+                write_parquet(parquet_data, os.path.join(OUT_DIR,file+'.parquet'), compression='snappy')
+                with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
+                    json.dump(outputJson, json_file)
+                json_file.close()
+                #print("uploading "+os.path.join(OUT_DIR,file+'.parquet'))
+                parquet_key = 'parquet/'+file+'.parquet'
+                try:
+                    client.head_object(Bucket=s3_bucket, Key=parquet_key)
+                    print("file "+ parquet_key + " is already in S3 bucket "+s3_bucket+ ", Skipping ..." )
+                except:
+                    print("Uploading " + parquet_key + " to S3 bucket "+s3_bucket+ " ..." )
+                    client.upload_file(os.path.join(OUT_DIR,file+'.parquet'), s3_bucket, parquet_key)
+
+                sys.exit()
+    #outputJson = process_file("/media/sf_berendes/capri_test_data/VN/2019/GRtoDPR.KEOX.190807.30913.V06A.DPR.NS.1_21.nc.gz")
 
 #    tempfp = tempfile.NamedTemporaryFile(mode = 'w', delete = False)
 #    with open("/home/dhis/test_vn.json", 'w') as result_file:
@@ -214,12 +272,13 @@ def main():
     #         gz.close()
     # print("read_vn gzipped json output file: " + tempname)
 
-    print ("starting upload...")
+#    print ("starting upload...")
 
 #    test_json = '{"name": "test", "min_lon": -13.6, "max_lon": -10.1, "min_lat": 6.8, "max_lat": 10.1, "variable": "HQprecipitation", "start_date": "2015-08-01T00:00:00.000Z", "end_date": "2015-08-01T23:59:59.999Z"}'
 #    response = post_http_data(json.loads(test_json))
-    response = post_http_data(outputJson)
-    print("post response: " + json.dumps(response))
+
+#    response = post_http_data(outputJson)
+#    print("post response: " + json.dumps(response))
 
 
 if __name__ == '__main__':
