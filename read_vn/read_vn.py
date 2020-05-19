@@ -135,6 +135,8 @@ def process_file(filename):
             varDict_fpdim['BBstatus'] =  nc.variables['BBstatus'][:]  # fpdim
             varDict_fpdim['TypePrecip'] =  nc.variables['TypePrecip'][:]  # fpdim
 
+            precip_rate_thresh = nc.variables['rain_min'][...]
+            print("rain_min ", precip_rate_thresh)
 
             # Elevation angle for surface radar, handled differently
             elevationAngle =  nc.variables['elevationAngle'][:]  # elevdim
@@ -174,11 +176,25 @@ def process_file(filename):
 
             outputJson = []
             count=0
+            site_rainy_count = 0
+            for fp in range(fpdim - 1):
+                for elev in range(elevations - 1):
+                    if varDict_elev_fpdim['PrecipRate'][elev][fp] > precip_rate_thresh:
+                        site_rainy_count = site_rainy_count + 1
+                        break
+            print("rainy count ", site_rainy_count)
+            percent_rainy = float(site_rainy_count)/float(fpdim)
+            print("fpdim ", fpdim)
+            percent_rainy = 100.0 * float(site_rainy_count)/float(fpdim)
+            print ("percent rainy ", percent_rainy)
+
             for elev in range(elevations-1):
                 for fp in range(fpdim-1):
                     # put in not varying values
-                    fp_entry={"GPM_ver": GPM_VERSION, "VN_ver": vn_version, "scan": SCAN_TYPE, "sensor": GPM_SENSOR, "GR_site": GR_site,
-                              "time": closestTime, "elev":float(elevationAngle[elev]), "vn_filename":VN_filename}
+                    fp_entry={"GPM_ver": GPM_VERSION, "VN_ver": vn_version, "scan": SCAN_TYPE, "sensor": GPM_SENSOR,
+                              "GR_site": GR_site,"time": closestTime, "elev":float(elevationAngle[elev]),
+                              "vn_filename":VN_filename, "site_percent_rainy":percent_rainy,
+                              "site_rainy":site_rainy_count, "site_fp_count":fpdim}
 
                     for fp_key in varDict_fpdim:
                         fp_entry[fp_key]=float(ma.getdata(varDict_fpdim[fp_key])[fp])
@@ -201,6 +217,13 @@ def process_file(filename):
 
 #    return json.dumps(districtPrecipStats)
 
+def upload_s3(local_file, s3_bucket, s3_key):
+    try:
+        client.head_object(Bucket=s3_bucket, Key=s3_key)
+        print("file " + s3_key + " is already in S3 bucket " + s3_bucket + ", Skipping ...")
+    except:
+        print("Uploading " + s3_key + " to S3 bucket " + s3_bucket + " ...")
+        client.upload_file(local_file, s3_bucket, s3_key)
 
 def main():
 
@@ -224,14 +247,15 @@ def main():
     #             print("Uploading %s..." % s3_path)
     #             client.upload_file(local_path, bucket, s3_path)
 
-    VN_DIR = '/media/sf_berendes/capri_test_data/VN/mrms_geomatch/2019'
-    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet/2019'
+    VN_DIR = '/media/sf_berendes/capri_test_data/VN/mrms_geomatch'
+    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet'
+    META_DIR = '/media/sf_berendes/capri_test_data/meta'
     s3_bucket = 'capri-data'
     #client = boto3.client('s3')
 
     for root, dirs, files in os.walk(VN_DIR, topdown=False):
         for file in files:
-            print('file ' + file)
+            #print('file ' + file)
             # only process zipped nc VN files
             if file.endswith('.nc.gz'):
                 outputJson = process_file(os.path.join(root,file))
@@ -239,20 +263,57 @@ def main():
                 # put deep learning images in S3
                 # put gzipped json VN file on S3 for indexing into Athena
                 parquet_data = ingest_data(outputJson)
+                os.makedirs(os.path.join(OUT_DIR), exist_ok=True)
                 write_parquet(parquet_data, os.path.join(OUT_DIR,file+'.parquet'), compression='snappy')
-                with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
-                    json.dump(outputJson, json_file)
-                json_file.close()
-                #print("uploading "+os.path.join(OUT_DIR,file+'.parquet'))
-                parquet_key = 'parquet/'+file+'.parquet'
-                try:
-                    client.head_object(Bucket=s3_bucket, Key=parquet_key)
-                    print("file "+ parquet_key + " is already in S3 bucket "+s3_bucket+ ", Skipping ..." )
-                except:
-                    print("Uploading " + parquet_key + " to S3 bucket "+s3_bucket+ " ..." )
-                    client.upload_file(os.path.join(OUT_DIR,file+'.parquet'), s3_bucket, parquet_key)
 
-                sys.exit()
+#                with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
+#                    json.dump(outputJson, json_file)
+#                json_file.close()
+
+                metadata = { "vn_filename":outputJson[0]["vn_filename"], "time": outputJson[0]["time"],
+                             "site_rainy": outputJson[0]["site_rainy"], "site_fp_count": outputJson[0]["site_fp_count"],
+                             "site_percent_rainy":outputJson[0]["site_percent_rainy"]}
+                os.makedirs(os.path.join(META_DIR), exist_ok=True)
+                with open(os.path.join(META_DIR,file+'.meta.json'), 'w') as json_file:
+                    json.dump(metadata, json_file)
+                json_file.close()
+
+                #print("uploading metadata "+os.path.join(META_DIR,file+'.meta.json'))
+                metadata_key = 'metadata/'+file+'.meta.json'
+                upload_s3(os.path.join(META_DIR,file+'.meta.json'), s3_bucket, metadata_key)
+
+                #print("uploading parquet "+os.path.join(OUT_DIR,file+'.parquet'))
+                parquet_key = 'parquet/'+file+'.parquet'
+                upload_s3(os.path.join(OUT_DIR,file+'.parquet'), s3_bucket, parquet_key)
+
+                # check for GPM and MRMS DL training files (.bin)
+                if os.path.isfile(os.path.join(root, file + '.gpm.bin')):
+                    upload_s3(os.path.join(root,file+'.gpm.bin'), s3_bucket, 'bin/'+file+'.gpm.bin')
+                if os.path.isfile(os.path.join(root, file + '.mrms.bin')):
+                    upload_s3(os.path.join(root,file+'.mrms.bin'), s3_bucket, 'bin/'+file+'.mrms.bin')
+
+                # check for GPM and MRMS DL images and kml files
+                # if os.path.isfile(os.path.join(root, file + '.gpm.bw.png')):
+                #     upload_s3(os.path.join(root,file+'.gpm.bw.png'), s3_bucket, 'img/'+file+'.gpm.bw.png')
+                # if os.path.isfile(os.path.join(root, file + '.gpm.bw.kml')):
+                #     upload_s3(os.path.join(root,file+'.gpm.bw.kml'), s3_bucket, 'img/'+file+'.gpm.bw.kml')
+                if os.path.isfile(os.path.join(root, file + '.gpm.col.png')):
+                    upload_s3(os.path.join(root,file+'.gpm.col.png'), s3_bucket, 'img/'+file+'.gpm.col.png')
+                if os.path.isfile(os.path.join(root, file + '.gpm.col.kml')):
+                    upload_s3(os.path.join(root,file+'.gpm.col.kml'), s3_bucket, 'img/'+file+'.gpm.col.kml')
+
+                # if os.path.isfile(os.path.join(root, file + '.mrms.bw.png')):
+                #     upload_s3(os.path.join(root,file+'.mrms.bw.png'), s3_bucket, 'img/'+file+'.mrms.bw.png')
+                # if os.path.isfile(os.path.join(root, file + '.mrms.bw.kml')):
+                #     upload_s3(os.path.join(root,file+'.mrms.bw.kml'), s3_bucket, 'img/'+file+'.mrms.bw.kml')
+                if os.path.isfile(os.path.join(root, file + '.mrms.col.png')):
+                    upload_s3(os.path.join(root,file+'.mrms.col.png'), s3_bucket, 'img/'+file+'.mrms.col.png')
+                if os.path.isfile(os.path.join(root, file + '.mrms.col.kml')):
+                    upload_s3(os.path.join(root,file+'.mrms.col.kml'), s3_bucket, 'img/'+file+'.mrms.col.kml')
+
+#                sys.exit()
+
+
     #outputJson = process_file("/media/sf_berendes/capri_test_data/VN/2019/GRtoDPR.KEOX.190807.30913.V06A.DPR.NS.1_21.nc.gz")
 
 #    tempfp = tempfile.NamedTemporaryFile(mode = 'w', delete = False)
