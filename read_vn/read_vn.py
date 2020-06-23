@@ -30,6 +30,7 @@ import requests
 from io import BytesIO
 import random
 from json2parquet import load_json, ingest_data, write_parquet, write_parquet_dataset
+import csv
 
 ingest_url = 'https://6inm6whnni.execute-api.us-east-1.amazonaws.com/default/ingest_vn_data'
 api_key = 'LakZ1uMrR465m1GQKoQhQ7Ig3bwr7wyPavUZ9mEc'
@@ -84,7 +85,7 @@ def post_http_data(request):
         sys.exit(1)
     return response
 
-def process_file(filename):
+def process_file(filename, alt_bright_band):
 
     with gzip.open(filename) as gz:
         with NetCDFFile('dummy', mode='r', memory=gz.read()) as nc:
@@ -109,8 +110,6 @@ def process_file(filename):
             varDict_elev_fpdim['GR_Dm_StdDev'] =  nc.variables['GR_Dm_StdDev'][:]  # elevAngle 	fpdim
             varDict_elev_fpdim['GR_Dm_Max'] = nc.variables['GR_Dm_Max'][:]   # elevAngle 	fpdim
             varDict_elev_fpdim['Dm'] = nc.variables['Dm'][:]   # elevAngle 	fpdim
-            varDict_elev_fpdim['topHeight'] = nc.variables['topHeight'][:]   # elevAngle 	fpdim
-            varDict_elev_fpdim['bottomHeight'] = nc.variables['bottomHeight'][:]   # elevAngle 	fpdim
             varDict_elev_fpdim['GR_Zdr'] =  nc.variables['GR_Zdr'][:]  # elevAngle 	fpdim
             varDict_elev_fpdim['GR_RHOhv'] = nc.variables['GR_RHOhv'][:]   # elevAngle 	fpdim
             varDict_elev_fpdim['GR_Nw'] =  nc.variables['GR_Nw'][:]  # elevAngle 	fpdim
@@ -119,6 +118,12 @@ def process_file(filename):
             varDict_elev_fpdim['Nw'] =  nc.variables['Nw'][:]  # elevAngle 	fpdim
             varDict_elev_fpdim['latitude'] = nc.variables['latitude'][:]   # elevAngle 	fpdim
             varDict_elev_fpdim['longitude'] = nc.variables['longitude'][:]   # elevAngle 	fpdim
+
+            # Add site elevation to top and bottom height to get MSL values and convert Km to m
+            site_elev = nc.variables['site_elev'][...]
+            print("site_elev ", site_elev)
+            varDict_elev_fpdim['topHeight'] = 1000.0 * (nc.variables['topHeight'][:] + site_elev)  # elevAngle 	fpdim
+            varDict_elev_fpdim['bottomHeight'] = 1000.0 * (nc.variables['bottomHeight'][:] + site_elev)  # elevAngle 	fpdim
 
             # Ground radar hydrometeor id histograms
             hid = nc.variables['GR_HID'][:]   # elevAngle 	fpdim 	hidim
@@ -169,6 +174,14 @@ def process_file(filename):
             GR_site = getattr(nc, 'GR_file').split('_')[0]
             VN_filename = os.path.basename(filename)
 
+            # extract GPM orbit number from VN filename
+            orbit_number = int(VN_filename.split('.')[3])
+            print("orbit number: ", orbit_number)
+            if GR_site in alt_bright_band.keys() and orbit_number in alt_bright_band[GR_site].keys():
+                alt_BB_height = alt_bright_band[GR_site][orbit_number]
+            else:
+                alt_BB_height = -9999.0
+
             # pick variable with most dimensions to define loops
             elevations = nc.variables['GR_HID'].shape[0]
             fpdim = nc.variables['GR_HID'].shape[1]
@@ -179,7 +192,7 @@ def process_file(filename):
             site_rainy_count = 0
             for fp in range(fpdim - 1):
                 for elev in range(elevations - 1):
-                    if varDict_elev_fpdim['PrecipRate'][elev][fp] > precip_rate_thresh:
+                    if varDict_elev_fpdim['PrecipRate'][elev][fp] >= precip_rate_thresh:
                         site_rainy_count = site_rainy_count + 1
                         break
             print("rainy count ", site_rainy_count)
@@ -190,11 +203,15 @@ def process_file(filename):
 
             for elev in range(elevations-1):
                 for fp in range(fpdim-1):
-                    # put in not varying values
+                    # only use matchup volumes > minimimum rain rate
+                    if varDict_elev_fpdim['PrecipRate'][elev][fp] < precip_rate_thresh:
+                        continue
+
+                    # put in non varying and metadata values for VN file
                     fp_entry={"GPM_ver": GPM_VERSION, "VN_ver": vn_version, "scan": SCAN_TYPE, "sensor": GPM_SENSOR,
                               "GR_site": GR_site,"time": closestTime, "elev":float(elevationAngle[elev]),
                               "vn_filename":VN_filename, "site_percent_rainy":percent_rainy,
-                              "site_rainy":site_rainy_count, "site_fp_count":fpdim}
+                              "site_rainy":site_rainy_count, "site_fp_count":fpdim, "ruc_0_height":alt_BB_height}
 
                     for fp_key in varDict_fpdim:
                         fp_entry[fp_key]=float(ma.getdata(varDict_fpdim[fp_key])[fp])
@@ -217,13 +234,30 @@ def process_file(filename):
 
 #    return json.dumps(districtPrecipStats)
 
-def upload_s3(local_file, s3_bucket, s3_key):
+def upload_s3(local_file, s3_bucket, s3_key, overwrite):
     try:
         client.head_object(Bucket=s3_bucket, Key=s3_key)
-        print("file " + s3_key + " is already in S3 bucket " + s3_bucket + ", Skipping ...")
+        if overwrite:
+            print("file " + s3_key + " is already in S3 bucket " + s3_bucket + ", Overwriting ...")
+            client.upload_file(local_file, s3_bucket, s3_key)
+        else:
+            print("file " + s3_key + " is already in S3 bucket " + s3_bucket + ", Skipping ...")
     except:
         print("Uploading " + s3_key + " to S3 bucket " + s3_bucket + " ...")
         client.upload_file(local_file, s3_bucket, s3_key)
+
+def read_alt_bb_file(filename):
+    alt_bb_dict = {}
+    with open(filename) as csvfile:
+        readCSV = csv.reader(csvfile, delimiter='|')
+        for row in readCSV:
+            radar_id=row[0]
+            orbit = int(row[1])
+            height = 1000.0 * float(row[2]) # in meters
+            if radar_id not in alt_bb_dict.keys():
+                alt_bb_dict[radar_id] = {}
+            alt_bb_dict[radar_id][orbit] = height
+    return alt_bb_dict
 
 def main():
 
@@ -250,68 +284,81 @@ def main():
     VN_DIR = '/media/sf_berendes/capri_test_data/VN/mrms_geomatch'
     OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet'
     META_DIR = '/media/sf_berendes/capri_test_data/meta'
+    alt_bb_file = '/media/sf_berendes/capri_test_data/BB/GPM_rain_event_bb_km.txt'
     s3_bucket = 'capri-data'
+    upload_bin = False
+    upload_img = False
+    upload_parquet_meta = True
+    overwrite_flag = True
+
     #client = boto3.client('s3')
+    bright_band = read_alt_bb_file(alt_bb_file)
 
     for root, dirs, files in os.walk(VN_DIR, topdown=False):
         for file in files:
             #print('file ' + file)
             # only process zipped nc VN files
             if file.endswith('.nc.gz'):
-                outputJson = process_file(os.path.join(root,file))
-                # look for image files with same base filename
-                # put deep learning images in S3
-                # put gzipped json VN file on S3 for indexing into Athena
-                parquet_data = ingest_data(outputJson)
-                os.makedirs(os.path.join(OUT_DIR), exist_ok=True)
-                write_parquet(parquet_data, os.path.join(OUT_DIR,file+'.parquet'), compression='snappy')
+                if upload_parquet_meta:
+                    outputJson = process_file(os.path.join(root,file), bright_band)
+                    # no precip volumes were found, skip file
+                    if len(outputJson) == 0:
+                        print("found no precip in file " + file + " skipping...")
+                        continue
+                    parquet_data = ingest_data(outputJson)
+                    os.makedirs(os.path.join(OUT_DIR), exist_ok=True)
+                    write_parquet(parquet_data, os.path.join(OUT_DIR,file+'.parquet'), compression='snappy')
 
-#                with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
-#                    json.dump(outputJson, json_file)
-#                json_file.close()
+                    #print("uploading parquet "+os.path.join(OUT_DIR,file+'.parquet'))
+                    parquet_key = 'parquet_new/'+file+'.parquet'
+                    upload_s3(os.path.join(OUT_DIR,file+'.parquet',), s3_bucket, parquet_key,overwrite_flag)
 
-                metadata = { "vn_filename":outputJson[0]["vn_filename"], "time": outputJson[0]["time"],
-                             "site_rainy": outputJson[0]["site_rainy"], "site_fp_count": outputJson[0]["site_fp_count"],
-                             "site_percent_rainy":outputJson[0]["site_percent_rainy"]}
-                os.makedirs(os.path.join(META_DIR), exist_ok=True)
-                with open(os.path.join(META_DIR,file+'.meta.json'), 'w') as json_file:
-                    json.dump(metadata, json_file)
-                json_file.close()
+                    with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
+                        json.dump(outputJson, json_file)
+                    json_file.close()
 
-                #print("uploading metadata "+os.path.join(META_DIR,file+'.meta.json'))
-                metadata_key = 'metadata/'+file+'.meta.json'
-                upload_s3(os.path.join(META_DIR,file+'.meta.json'), s3_bucket, metadata_key)
+                    metadata = { "vn_filename":outputJson[0]["vn_filename"], "time": outputJson[0]["time"],
+                                 "site_rainy": outputJson[0]["site_rainy"], "site_fp_count": outputJson[0]["site_fp_count"],
+                                 "site_percent_rainy":outputJson[0]["site_percent_rainy"]}
+                    os.makedirs(os.path.join(META_DIR), exist_ok=True)
+                    with open(os.path.join(META_DIR,file+'.meta.json'), 'w') as json_file:
+                        json.dump(metadata, json_file)
+                    json_file.close()
 
-                #print("uploading parquet "+os.path.join(OUT_DIR,file+'.parquet'))
-                parquet_key = 'parquet/'+file+'.parquet'
-                upload_s3(os.path.join(OUT_DIR,file+'.parquet'), s3_bucket, parquet_key)
+                    #print("uploading metadata "+os.path.join(META_DIR,file+'.meta.json'))
+                    metadata_key = 'metadata/'+file+'.meta.json'
+                    upload_s3(os.path.join(META_DIR,file+'.meta.json'), s3_bucket, metadata_key,overwrite_flag)
 
-                # check for GPM and MRMS DL training files (.bin)
-                if os.path.isfile(os.path.join(root, file + '.gpm.bin')):
-                    upload_s3(os.path.join(root,file+'.gpm.bin'), s3_bucket, 'bin/'+file+'.gpm.bin')
-                if os.path.isfile(os.path.join(root, file + '.mrms.bin')):
-                    upload_s3(os.path.join(root,file+'.mrms.bin'), s3_bucket, 'bin/'+file+'.mrms.bin')
+                # look for deep leraning training and image files with same base filename
+                # put deep learning binary files and images in S3
+                if upload_bin:
+                    # check for GPM and MRMS DL training files (.bin)
+                    if os.path.isfile(os.path.join(root, file + '.gpm.bin')):
+                        upload_s3(os.path.join(root,file+'.gpm.bin'), s3_bucket, 'bin/'+file+'.gpm.bin',overwrite_flag)
+                    if os.path.isfile(os.path.join(root, file + '.mrms.bin')):
+                        upload_s3(os.path.join(root,file+'.mrms.bin'), s3_bucket, 'bin/'+file+'.mrms.bin',overwrite_flag)
 
-                # check for GPM and MRMS DL images and kml files
-                # if os.path.isfile(os.path.join(root, file + '.gpm.bw.png')):
-                #     upload_s3(os.path.join(root,file+'.gpm.bw.png'), s3_bucket, 'img/'+file+'.gpm.bw.png')
-                # if os.path.isfile(os.path.join(root, file + '.gpm.bw.kml')):
-                #     upload_s3(os.path.join(root,file+'.gpm.bw.kml'), s3_bucket, 'img/'+file+'.gpm.bw.kml')
-                if os.path.isfile(os.path.join(root, file + '.gpm.col.png')):
-                    upload_s3(os.path.join(root,file+'.gpm.col.png'), s3_bucket, 'img/'+file+'.gpm.col.png')
-                if os.path.isfile(os.path.join(root, file + '.gpm.col.kml')):
-                    upload_s3(os.path.join(root,file+'.gpm.col.kml'), s3_bucket, 'img/'+file+'.gpm.col.kml')
+                if upload_img:
+                    # check for GPM and MRMS DL images and kml files
+                    # if os.path.isfile(os.path.join(root, file + '.gpm.bw.png')):
+                    #     upload_s3(os.path.join(root,file+'.gpm.bw.png'), s3_bucket, 'img/'+file+'.gpm.bw.png',overwrite_flag)
+                    # if os.path.isfile(os.path.join(root, file + '.gpm.bw.kml')):
+                    #     upload_s3(os.path.join(root,file+'.gpm.bw.kml'), s3_bucket, 'img/'+file+'.gpm.bw.kml',overwrite_flag)
+                    if os.path.isfile(os.path.join(root, file + '.gpm.col.png')):
+                        upload_s3(os.path.join(root,file+'.gpm.col.png'), s3_bucket, 'img/'+file+'.gpm.col.png',overwrite_flag)
+                    if os.path.isfile(os.path.join(root, file + '.gpm.col.kml')):
+                        upload_s3(os.path.join(root,file+'.gpm.col.kml'), s3_bucket, 'img/'+file+'.gpm.col.kml',overwrite_flag)
 
-                # if os.path.isfile(os.path.join(root, file + '.mrms.bw.png')):
-                #     upload_s3(os.path.join(root,file+'.mrms.bw.png'), s3_bucket, 'img/'+file+'.mrms.bw.png')
-                # if os.path.isfile(os.path.join(root, file + '.mrms.bw.kml')):
-                #     upload_s3(os.path.join(root,file+'.mrms.bw.kml'), s3_bucket, 'img/'+file+'.mrms.bw.kml')
-                if os.path.isfile(os.path.join(root, file + '.mrms.col.png')):
-                    upload_s3(os.path.join(root,file+'.mrms.col.png'), s3_bucket, 'img/'+file+'.mrms.col.png')
-                if os.path.isfile(os.path.join(root, file + '.mrms.col.kml')):
-                    upload_s3(os.path.join(root,file+'.mrms.col.kml'), s3_bucket, 'img/'+file+'.mrms.col.kml')
+                    # if os.path.isfile(os.path.join(root, file + '.mrms.bw.png')):
+                    #     upload_s3(os.path.join(root,file+'.mrms.bw.png'), s3_bucket, 'img/'+file+'.mrms.bw.png',overwrite_flag)
+                    # if os.path.isfile(os.path.join(root, file + '.mrms.bw.kml')):
+                    #     upload_s3(os.path.join(root,file+'.mrms.bw.kml'), s3_bucket, 'img/'+file+'.mrms.bw.kml',overwrite_flag)
+                    if os.path.isfile(os.path.join(root, file + '.mrms.col.png')):
+                        upload_s3(os.path.join(root,file+'.mrms.col.png'), s3_bucket, 'img/'+file+'.mrms.col.png',overwrite_flag)
+                    if os.path.isfile(os.path.join(root, file + '.mrms.col.kml')):
+                        upload_s3(os.path.join(root,file+'.mrms.col.kml'), s3_bucket, 'img/'+file+'.mrms.col.kml',overwrite_flag)
 
-#                sys.exit()
+                #sys.exit()
 
 
     #outputJson = process_file("/media/sf_berendes/capri_test_data/VN/2019/GRtoDPR.KEOX.190807.30913.V06A.DPR.NS.1_21.nc.gz")
@@ -344,25 +391,3 @@ def main():
 
 if __name__ == '__main__':
    main()
-
-# get attributes
-# // global attributes:
-#:DPR_Version = "V06A";
-#:DPR_ScanType = "NS";
-#:GV_UF_Z_field = "CZ";
-#:GV_UF_ZDR_field = "DR";
-#:GV_UF_KDP_field = "KD";
-#:GV_UF_RHOHV_field = "RH";
-#:GV_UF_RC_field = "RC";
-#:GV_UF_RP_field = "RP";
-#:GV_UF_RR_field = "RR";
-#:GV_UF_HID_field = "FH";
-#:GV_UF_D0_field = "Unspecified";
-#:GV_UF_NW_field = "NW";
-#:GV_UF_DM_field = "DM";
-#:GV_UF_N2_field = "Unspecified";
-#:DPR_2ADPR_file = "2A-CS-CONUS.GPM.DPR.V8-20180723.20190807-S190802-E191639.030913.V06A.HDF5";
-#:DPR_2AKU_file = "no_2AKU_file";
-#:DPR_2AKA_file = "no_2AKA_file";
-#:DPR_2BCMB_file = "no_2BCMB_file";
-#:GR_file = "KEOX_2019_0807_190840.cf.gz";
