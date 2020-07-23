@@ -17,107 +17,248 @@ import gzip
 import string
 import sys
 import time
+import urllib
+import datetime
 
 import requests
 
-url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/'
-url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/result'
+#url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/'
+#url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/result'
+url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/'
+url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/result/'
+
+max_retry_count = 30
+retry_interval = 2
+result_page_size = 3000
 
 import json
 
-def get_http_data(arg_dict):
+class VNQuery:
+    def __init__(self):
+        self.params = {}
+    def get_params(self):
+        return self.params
+    def get_results(self):
+        try:
+            response = requests.get(url_query, params=self.params)
 
-    r = requests.get(url_query,params=arg_dict)
-    print(r.text)
-    query_id = r.text.split('queryId=')[1].split('}')[0]
+            # If the response was successful, no Exception will be raised
+            response.raise_for_status()
+        except requests.HTTPError as http_err:
+            print(f'HTTP error occurred: {http_err}')  # Python 3.6
+        except Exception as err:
+            print(f'Other error occurred: {err}')  # Python 3.6
+        #        else:
+        print('Successfully connected with server, submitted query ...')
 
-    print(query_id)
-    p_dict = {'qid': query_id}
+        print(response.text)
+        query_id = response.text.split('queryId=')[1].split('}')[0]
 
-# HACK!
-# need a status query for result, results aren't ready, query returns an error
-# sleep for 5 seconds to give results time to accumulate
-    time.sleep(2)
+        print(query_id)
+        q_params = {'qid': query_id}
 
-    # need to do pagination of results
-    matchupList = []
-    offset='0'
-    while True:
-        r = requests.get(url_result+'/?offset='+offset, params=p_dict)
-        #print(r)
-        data = json.loads(r.text)
-        print(data)
-        #print(data['result'])
-        # Process the payload or add it to a list
-        for entry in data['result']:
-            matchupList.append(entry)
-            #print("entry: ", entry)
+    #
+        # From Pooja:  Hi Todd, I have implemented pagination and also the status (Running, queued, cancelled, failed, succeeded, error)
+        # for the results. The api returns 100 items by default but you can configure that using page_size parameter
+        # in the url. For the pagination, I have used page_token parameter. The page_token parameter for next page
+        # is given in the result json.
+        status='waiting'
+        retry_count=0
+        print('Returning results...')
+        while True:
+            # loop until result is ready or an error has occurred
+            try:
+                response = requests.get(url_result, params=q_params)
 
-        # offset = data['offset'] # offset +1?
-        # print("offset "+ offset)
-        # hasMore = data['has-more']
-        # print("has-more "+hasMore)
-        # if not hasMore:
-        break
+                # If the response was successful, no Exception will be raised
+                response.raise_for_status()
+            except requests.HTTPError as http_err:
+                print(f'HTTP error occurred: {http_err}')  # Python 3.6
+            except Exception as err:
+                print(f'Other error occurred: {err}')  # Python 3.6
+    #        else:
 
-    return matchupList
+            r = response.json()
+            #print("r ",r)
+            if 'status' in r:
+                status = r['status']
+            if str(status).lower() == 'succeeded':
+                break
+            if str(status).lower() == 'failed' or str(status).lower() == 'error':
+                return {'status': 'failed', 'message': str(status).lower()}
+            print("query status: ", str(status).lower())
+            time.sleep(retry_interval)
+            retry_count = retry_count+1
+            if retry_count>max_retry_count:
+                print('HTTP Error: Exceeded maximum retries')
+                return {'status': 'failed', 'message': 'HTTP Error: Exceeded maximum retries'}
 
-def get_http_data_test(arg_dict):
+        # need to do pagination of results
+        matchupDict = {}
+    #    matchupList = []
+        offset='0'
+        page_token = ''
+        page_count = 1
+        while True:
+            # sleep until result is ready or an error has occurred
+            q_params = {'qid': query_id, 'page_size':result_page_size}
+            if len(page_token) > 0:
+                print("page token ", page_token)
+    #            token=str(urllib.parse.quote(page_token,safe=''))
+                q_params['page_token']=page_token
 
-    r = requests.get(url_query,params=arg_dict)
-    print(r.text)
-    query_id = r.text.split('queryId=')[1].split('}')[0]
+            # loop until result is ready or an error has occurred
+            try:
+                response = requests.get(url_result, params=q_params)
+                print("request: ", response.request.url)
+                # If the response was successful, no Exception will be raised
+                response.raise_for_status()
+            except requests.HTTPError as http_err:
+                print(f'HTTP error occurred: {http_err}')  # Python 3.6
+            except Exception as err:
+                print(f'Other error occurred: {err}')  # Python 3.6
 
-    print(query_id)
-    p_dict = {'qid': query_id}
+            #r = requests.get(url_result, params=q_params)
+            #print(r)
+            result = response.json()
+            #result = json.loads(r.text)
+            #print(result)
+            #print(data['result'])
+            # Process the payload or add it to a list
+            if str(result['status']).lower() == 'error':
+                print("Error: ", result['message'])
+                print("Query parameters used: ", q_params)
+                return {'status': 'failed', 'message': 'bad query'}
 
-# HACK!
-# need a status query for result, results aren't ready, query returns an error
-# sleep for 5 seconds to give results time to accumulate
-    time.sleep(2)
+            #print("result: ", result)
+            for entry in result['data']:
+    #            matchupList.append(entry)
+                for key,value in entry.items():
+                    if key in matchupDict:
+                        matchupDict[key].append(value)
+                    else:
+                        matchupDict[key]=[]
+                        matchupDict[key].append(value)
 
-    # need to do pagination of results
-    s = requests.Session()
-    matchupList = []
-    response = s.get(url_result, params=p_dict)
-    print(response)
-    resp_json = response.json()
-    print(json.dumps(resp_json))
-    matchupList.append(resp_json)
+                #print("entry: ", entry)
+            if 'page_token' in result:
+                page_token = result['page_token']
+            else:
+                break
+            page_count = page_count + 1
 
-    while resp_json.get('hasMore') == True:
-        print("page...")
-        response = s.get(resp_json['nextPageUrl'])
-        resp_json = response.json()
-        matchupList.append(resp_json)
+        print("processed ", page_count, " pages")
+        return {'status':'success', 'message':'success', 'results':matchupDict}
 
-#    result = requests.get(url_result, params=p_dict)
+    # add a single key,value pair as a filter parameter
+    def add_parameter(self, key, value):
+        self.params[key] = value
 
-    # success=False
-    # count = 0
-    # while not success and count < 5:
-    #     result = requests.get(url_result,params=p_dict)
-    #     print(result)
-    #     if result['success']:
-    #         success=True
-    #     else:
-    #         time.sleep(5)
-    #     count = count + 1
-    #     print(count)
-    #result = requests.get(url_result+"?qid="+query_id)
-
-    #return result
-    return matchupList
-
+    # convenience functions for common filtering methods
+    def set_time_range(self, start_time, end_time):
+        self.params['start_time'] = start_time
+        self.params['end_time'] = end_time
+    def set_lat_lon_box(self, start_lat, end_lat, start_lon, end_lon):
+        self.params['start_lat'] = start_lat
+        self.params['end_lat'] = end_lat
+        self.params['start_lon'] = start_lon
+        self.params['end_lon'] = end_lon
+    #start_ray and end_ray are zero based and inclusive i.e. ray >= start_ray AND ray <= end_ray
+    def set_inner_swath(self, start_ray, end_ray):
+        self.params['start_ray_num'] = start_ray
+        self.params['end_ray_num'] = end_ray
+        self.params['swath'] = "inner"
+    #start_ray and end_ray are zero based and exclusive i.e. ray < start_ray OR ray > end_ray
+    def set_outer_swath(self, start_ray, end_ray):
+        self.params['start_ray_num'] = start_ray
+        self.params['end_ray_num'] = end_ray
+        self.params['swath'] = "outer"
+    def set_gpm_version(self,version):
+        self.params['gpm_ver_like'] = version
+    def set_vn_version(self,version):
+        self.params['vn_ver_like'] = version
+    #NS, MS, HS, FS
+    def set_scan(self,type):
+        self.params['scan_like'] = type
+    def set_sensor(self,type):
+        self.params['sensor_like'] = type
+    # can also use % as a wildcard, i.e. site="K%" and list of sites i.e. site="KI%,KM%,KF%"
+    def set_gr_site(self,site):
+        self.params['gr_site_like'] = site
+    def set_gr_site_exclude(self,site):
+        self.params['gr_site_not_like'] = site
+    def set_zfact_measured_range(self,min,max):
+        self.params['min_zfact_measured'] = min
+        self.params['max_zfact_measured'] = max
+    def set_zfact_corrected_range(self,min,max):
+        self.params['min_zfact_corrected'] = min
+        self.params['max_zfact_corrected'] = max
+    def set_grz_range(self,min,max):
+        self.params['min_grz'] = min
+        self.params['max_grz'] = max
+    def set_dm_range(self,min,max):
+        self.params['min_dm'] = min
+        self.params['max_dm'] = max
+    def set_gr_dm_range(self,min,max):
+        self.params['min_gr_dm'] = min
+        self.params['max_gr_dm'] = max
+    def set_site_percent_rainy_range(self,min,max):
+        self.params['min_site_percent_rainy'] = min
+        self.params['max_site_percent_rainy'] = max
+    def set_site_fp_count_range(self,min,max):
+        self.params['min_site_fp_count'] = min
+        self.params['max_site_fp_count'] = max
 
 def main():
-    print, "in main"
 
-    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-22 00:00:00"}
-    result = get_http_data(params)
+    ts = datetime.datetime.now().timestamp()
+    print("start time: ", ts)
 
-    for entry in result:
-        print(entry)
+#    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-21 00:00:00"}
+    query = VNQuery() # initialize query parameters
+    query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
+    #query.set_gr_site("KFSD")
+    # query.set_lat_lon_box(start_lat, end_lat, start_lon, end_lon)
+    # query.set_inner_swath(start_ray, end_ray)
+    # query.set_inner_swath(start_ray, end_ray)
+    # query.set_gpm_version(version)
+    # query.set_vn_version(version)
+    # query.set_scan(type)
+    # query.set_sensor(type)
+    # query.set_gr_site(site)
+    # query.set_gr_site_exclude(site)
+    # query.set_zfact_measured_range(min,max)
+    # query.set_zfact_corrected_range(min,max)
+    # query.set_grz_range(min,max)
+    # query.set_dm_range(min,max)
+    # query.set_gr_dm_range(min,max)
+    # query.set_site_percent_rainy_range(min,max)
+    # query.set_site_fp_count_range(min,max)
+
+    print(query.get_params())
+
+    #exit(0)
+
+    result = query.get_results()
+
+    # get list of sites
+    # gr_sites = {}
+    # for site in result['results']["gr_site"]:
+    #     gr_sites[site]="found"
+    #
+    # print(gr_sites.keys())
+
+    if 'results' in result:
+        num_results = len(result['results']['latitude']) # pick a key value to get count of results
+        print("number of results: ", num_results)
+#    for entry in result['results']:
+#        print(entry)
+
+    endts = datetime.datetime.now().timestamp()
+    print("end time: ", endts)
+
+    diff = endts - ts
+    print("elapsed time ", diff, "secs")
 
 if __name__ == '__main__':
    main()
@@ -182,3 +323,36 @@ if __name__ == '__main__':
 # vn_ver_not_like	vn_ ver
 # sensor_like	sensor
 # sensor_not_like	sensor
+
+
+# API Endpoint
+# /?start_time="2014-03-21 03:51:26"&end_time= "2020-03-21 03:51:26"
+# /?start_lat=19&end_lat=64&start_lon=-161&end_lon=-68
+# /?start_ray_num=2&end_ray_num=8&swath="outer"
+# /?start_ray_num=2&end_ray_num=8
+# /?start_ray_num=2&end_ray_num=8&swath="inner"
+# /?gpm_ver_like="V06A"
+# /?vn_ver_like=1.21
+# /?scan_like=NS
+# /?sensor_like=DPR
+# /?gr_site_like=K%
+# /?gr_site_like=%R
+# /?gr_site_like=%AB%
+# /?gr_site_not_like=K%
+# /?gr_site_like=KI%,KM%,KF%
+# /?gr_site_not_like=KI%,KM%,KF%
+# gr_site_not_like=KI%,KM%,KF%&gr_site_like=%J,%C
+# /?vn_filename_like=%KARX%
+# /?min_zfact_measured=20&max_zfact_measured=40
+# /?min_zfact_corrected=20&max_zfact_corrected=40
+#  /?min_grz=20&max_grz=40
+# /?min_dm=1.99&max_dm=2.01
+# /?min_gr_dm=0.99&max_gr_dm=1.01
+# /?min_site_percent_rainy=6&max_site_percent_rainy=7
+# /?min_site_fp_count=600&max_site_fp_count=700
+# /?start_ray_num=2&end_ray_num=8&swath="inner"&sensor_not_like=k,l
+# /?start_time="2014-01-01 00:00"&end_time="2020-01-01 59:00"&scan_not_like="K%"
+# /?start_lat=45&end_lon=86&scan_not_like="K%"
+# /?start_ray_num=2&end_ray_num=8&swath="inner"&sensor_not_like=%k,l%&scan_like=K%,N%
+# start_ray_num=2&end_ray_num=8&swath="outer"&sensor_not_like=%k,l%&scan_like=K%,N%
+# /
