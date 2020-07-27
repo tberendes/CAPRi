@@ -11,19 +11,19 @@
 #
 # ---------------------------------------------------------------------------------------------
 
-
 # --Do all the necessary imports
+import csv
 import gzip
+import os
 import string
 import sys
 import time
 import urllib
 import datetime
+import tempfile
 
 import requests
 
-#url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/'
-#url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/result'
 url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/'
 url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/result/'
 
@@ -36,9 +36,12 @@ import json
 class VNQuery:
     def __init__(self):
         self.params = {}
+        self.query_id=''
+        self.q_params={}
+        self.result_url=''
     def get_params(self):
         return self.params
-    def get_results(self):
+    def submit_query(self):
         try:
             response = requests.get(url_query, params=self.params)
 
@@ -46,29 +49,36 @@ class VNQuery:
             response.raise_for_status()
         except requests.HTTPError as http_err:
             print(f'HTTP error occurred: {http_err}')  # Python 3.6
+            return {'status': 'failed', 'message': 'HTTP error occurred during query submission'}
         except Exception as err:
             print(f'Other error occurred: {err}')  # Python 3.6
+            return {'status': 'failed', 'message': 'Error occurred during query submission'}
         #        else:
         print('Successfully connected with server, submitted query ...')
 
         print(response.text)
-        query_id = response.text.split('queryId=')[1].split('}')[0]
+        self.query_id = response.text.split('queryId=')[1].split('}')[0]
 
-        print(query_id)
-        q_params = {'qid': query_id}
+        print(self.query_id)
+        self.q_params = {'qid': self.query_id}
 
-    #
+        return {'status': 'success', 'message': 'Query successfully submitted'}
+
+    def wait_for_query(self):
         # From Pooja:  Hi Todd, I have implemented pagination and also the status (Running, queued, cancelled, failed, succeeded, error)
         # for the results. The api returns 100 items by default but you can configure that using page_size parameter
         # in the url. For the pagination, I have used page_token parameter. The page_token parameter for next page
         # is given in the result json.
-        status='waiting'
-        retry_count=0
-        print('Returning results...')
+        status = 'waiting'
+        retry_count = 0
+        print('Waiting for results...')
+        # set page size to zero for status only
+        params = self.q_params
+#        params['page_size'] = 0
         while True:
             # loop until result is ready or an error has occurred
             try:
-                response = requests.get(url_result, params=q_params)
+                response = requests.get(url_result, params=self.q_params)
 
                 # If the response was successful, no Exception will be raised
                 response.raise_for_status()
@@ -76,10 +86,10 @@ class VNQuery:
                 print(f'HTTP error occurred: {http_err}')  # Python 3.6
             except Exception as err:
                 print(f'Other error occurred: {err}')  # Python 3.6
-    #        else:
+            #        else:
 
             r = response.json()
-            #print("r ",r)
+            # print("r ",r)
             if 'status' in r:
                 status = r['status']
             if str(status).lower() == 'succeeded':
@@ -88,20 +98,35 @@ class VNQuery:
                 return {'status': 'failed', 'message': str(status).lower()}
             print("query status: ", str(status).lower())
             time.sleep(retry_interval)
-            retry_count = retry_count+1
-            if retry_count>max_retry_count:
+            retry_count = retry_count + 1
+            if retry_count > max_retry_count:
                 print('HTTP Error: Exceeded maximum retries')
                 return {'status': 'failed', 'message': 'HTTP Error: Exceeded maximum retries'}
 
+        if 'file_url' in r:
+            self.result_url = r['file_url']
+        print("Athena result URL: ", self.result_url)
+
+        return {'status': 'success', 'message': 'Successfully performed query'}
+
+    def get_results(self):
+
+        q_res = self.submit_query()
+        if q_res['status'] != 'success':
+            return {'status': 'failed', 'message': 'Query submission failed'}
+        w_res = self.wait_for_query()
+        if w_res['status'] != 'success':
+            return {'status': 'failed', 'message': 'Query execution failed'}
         # need to do pagination of results
         matchupDict = {}
     #    matchupList = []
         offset='0'
         page_token = ''
         page_count = 1
+        result_cnt = 0
         while True:
             # sleep until result is ready or an error has occurred
-            q_params = {'qid': query_id, 'page_size':result_page_size}
+            q_params = {'qid': self.query_id, 'page_size':result_page_size}
             if len(page_token) > 0:
                 print("page token ", page_token)
     #            token=str(urllib.parse.quote(page_token,safe=''))
@@ -134,11 +159,10 @@ class VNQuery:
             for entry in result['data']:
     #            matchupList.append(entry)
                 for key,value in entry.items():
-                    if key in matchupDict:
-                        matchupDict[key].append(value)
-                    else:
-                        matchupDict[key]=[]
-                        matchupDict[key].append(value)
+                    if key not in matchupDict:
+                        matchupDict[key] = []
+                    matchupDict[key].append(value)
+                result_cnt = result_cnt+1
 
                 #print("entry: ", entry)
             if 'page_token' in result:
@@ -148,7 +172,64 @@ class VNQuery:
             page_count = page_count + 1
 
         print("processed ", page_count, " pages")
+        print("read ", result_cnt, " records")
         return {'status':'success', 'message':'success', 'results':matchupDict}
+
+    def download_csv(self):
+        q_res = self.submit_query()
+        if q_res['status'] != 'success':
+            return {'status': 'failed', 'message': 'Query submission failed'}
+        w_res = self.wait_for_query()
+        if w_res['status'] != 'success':
+            return {'status': 'failed', 'message': 'Query execution failed'}
+
+        get_response = requests.get(self.result_url, stream=True)
+        #file_name = self.result_url.split("/")[-1]
+        f = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
+#        with open(file_name, 'wb') as f:
+        for chunk in get_response.iter_content(chunk_size=1024):
+            if chunk:  # filter out keep-alive new chunks
+                f.write(chunk)
+        fname = f.name
+        print("fname ",fname)
+        f.close()
+        #f.seek(0)
+        matchupDict = {}
+
+        row_cnt = 0
+        # with open(fname, "r") as f:
+        #     reader = csv.reader(f)
+        #     keys=[]
+        #     for line in reader:
+        #         if row_cnt == 0:
+        #             for key in line:
+        #                 keys.append(key)
+        #         else:
+        #             for i in range(len(keys)):
+        #                 if keys[i] not in matchupDict:
+        #                     matchupDict[keys[i]] = []
+        #                 matchupDict[keys[i]].append(line[i])
+        #         row_cnt = row_cnt + 1
+        #     row_cnt = row_cnt - 1 # subtract one for header line
+        # f.close()
+
+        with open(fname) as f:
+            # parse CSV file
+            for row in csv.DictReader(f):
+                for key, value in row.items():
+                    if key not in matchupDict:
+                        matchupDict[key] = []
+                    matchupDict[key].append(value)
+                row_cnt = row_cnt + 1
+        f.close()
+
+        if os.path.exists(fname):
+            os.remove(fname)
+        else:
+            print("Can not delete temporary file ", fname)
+        print("read ", row_cnt, " records")
+
+        return {'status':'success', 'message':'Successfully downloaded CSV results', 'results':matchupDict}
 
     # add a single key,value pair as a filter parameter
     def add_parameter(self, key, value):
@@ -217,6 +298,9 @@ def main():
 #    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-21 00:00:00"}
     query = VNQuery() # initialize query parameters
     query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
+
+    #available filter methods:
+
     #query.set_gr_site("KFSD")
     # query.set_lat_lon_box(start_lat, end_lat, start_lon, end_lon)
     # query.set_inner_swath(start_ray, end_ray)
@@ -235,27 +319,77 @@ def main():
     # query.set_site_percent_rainy_range(min,max)
     # query.set_site_fp_count_range(min,max)
 
-    print(query.get_params())
+    #print(query.get_params())
 
     #exit(0)
 
     result = query.get_results()
+    #result = query.download_csv()
+
+    if 'status' not in result or result['status'] == 'failed':
+        print("Query failed")
+        exit(-1)
+    if 'results' in result:
+        matchups = result['results']
+    else:
+        print("Query found no matchups")
+        exit(0)
 
     # get list of sites
-    # gr_sites = {}
-    # for site in result['results']["gr_site"]:
-    #     gr_sites[site]="found"
-    #
-    # print(gr_sites.keys())
+    gr_sites = {}
+    for site in matchups["gr_site"]:
+        gr_sites[site]="found"
 
+    if len(gr_sites.keys()) > 0:
+        print("Radar sites present in query return:")
+        print(gr_sites.keys())
+
+    # print number of results in dictionary
     if 'results' in result:
-        num_results = len(result['results']['latitude']) # pick a key value to get count of results
-        print("number of results: ", num_results)
-#    for entry in result['results']:
-#        print(entry)
+        num_results = len(matchups['latitude']) # pick a key value to get count of results
+        print("number of VN volume matches: ", num_results)
 
+    # for key,values in matchups.items():
+    #     print("key ", key, " value[0] ", values[0])
+    # for key,values in matchups.items():
+    #     print("key ", key, " value[-1] ", values[-1])
     endts = datetime.datetime.now().timestamp()
     print("end time: ", endts)
+
+    #for validation experiment, create unique sort order field by combining filename, and volume parameters
+    # create index sorted by vn_filename, raynum, scannum, elev
+    sort_dict = {}
+    fnames = matchups['vn_filename']
+    raynum = matchups['raynum']
+    scannum = matchups['scannum']
+    elev = matchups['elev']
+
+    # create index dictionary
+    for cnt in range(len(fnames)):
+        sort_str = fnames[cnt]+raynum[cnt]+scannum[cnt]+elev[cnt]
+#        print("cnt ", cnt, " sort str ", sort_str)
+        sort_dict[sort_str] = cnt
+
+    # sort by filename
+    sorted_index = []
+    for fname in sorted(sort_dict):
+        sorted_index.append(sort_dict[fname])
+
+    file1 = open("stream_test.txt", "w")  # write mode
+#    file1 = open("csv_file_test_dict.txt", "w")  # write mode
+#    file1 = open("csv_file_test_reader.txt", "w")  # write mode
+
+    for i in range(len(fnames)):
+        print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
+              , scannum[sorted_index[i]], ",", elev[sorted_index[i]])
+        print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
+              , scannum[sorted_index[i]], ",", elev[sorted_index[i]], file=file1)
+
+#     for key,values in matchups.items():
+#         for i in range(len(values)):
+#             print(i, " ", key, " ", values[sorted_index[i]])
+#             print(i, " ", key, " ", values[sorted_index[i]], file=file1)
+    file1.close()
 
     diff = endts - ts
     print("elapsed time ", diff, "secs")
