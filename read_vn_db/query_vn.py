@@ -295,18 +295,14 @@ def main():
         print("Query failed: ", res['message'])
         exit(-1)
 
-    # download csv file, may specify optional filename, if ommitted, uses temporary file
+    # download csv file, may specify optional filename
+    # if optional filename is ommitted, uses temporary file
+    # which is automatically deleted on exit of program
     # check 'status' entry for 'success' or 'failed'
     res = query.download_csv(filename="test_csv.csv")
     if res['status'] != 'success':
         print("Download failed: ", res['message'])
         exit(-1)
-
-    # optionally save CSV file if temporary filename was used (omitted filename in download_csv)
-    # res = query.save_csv("test_csv.csv")
-    # if res['status'] != 'success':
-    #     print("Save failed: ", res['message'])
-    #     exit(-1)
 
     # download (if not already downloaded) and read CSV file and return dictionary with status and results
     result = query.get_csv()
@@ -380,8 +376,8 @@ def main():
     diff = endts - ts
     print("elapsed time ", diff, "secs")
 
-    # delete CSV file if done with it
-    #query.delete_csv()
+    # delete CSV file if done with it, only necessary if you supplied a filename to query.download_csv()
+    # query.delete_csv()
 
 if __name__ == '__main__':
    main()
