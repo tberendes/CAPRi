@@ -64,7 +64,7 @@ class VNQuery:
     def submit_query(self):
         # delete previous query temporary CSV file is present
         if self.temp_file_flag and self.result_downloaded:
-            self.delete_temporary_csv()
+            self.delete_csv()
         self.result_downloaded = False
         try:
             response = requests.get(url_query, params=self.params)
@@ -166,7 +166,7 @@ class VNQuery:
             return {'status': 'failed', 'message': 'Failed to save CSV results'}
         return {'status': 'success', 'message': 'Successfully saved CSV results'}
 
-    def delete_temporary_csv(self):
+    def delete_csv(self):
         if os.path.exists(self.csv_filename):
             os.remove(self.csv_filename)
         else:
