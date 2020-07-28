@@ -25,6 +25,8 @@ import tempfile
 
 import requests
 
+# these are the API endpoints for the query submission and retrieval of results
+# they are experimental, and subject to change
 url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/'
 url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/result/'
 
@@ -245,11 +247,13 @@ def main():
     print("start time: ", ts)
 
 #    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-21 00:00:00"}
-    query = VNQuery() # initialize query parameters
+    # initialize query class
+    query = VNQuery()
+
+    # initialize query parameters
     query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
 
     #Various available filter methods, can use in any combination:
-
     #query.set_gr_site("KFSD")
     # query.set_lat_lon_box(start_lat, end_lat, start_lon, end_lon)
     # query.set_inner_swath(start_ray, end_ray)
@@ -270,7 +274,6 @@ def main():
 
     #print(query.get_params())
 
-    #exit(0)
 
     # submit query to AWS
     res = query.submit_query()
@@ -278,14 +281,14 @@ def main():
         print("Query failed")
         exit(-1)
 
-    # downoad temporary csv file and return parsed results in a dictionary called 'results'
+    # download temporary csv file and return parsed results in a dictionary called 'results'
     # check 'status' entry for 'success' or 'failed'
     query.download_csv()
 
-    # save CSV file
+    # optionally save CSV file
     query.save_csv("test_csv.csv")
 
-    # read downloaded CSV file and return dictionary
+    # download (if not already present) and read CSV file and return dictionary with status and results
     result = query.get_csv()
 
     if 'status' not in result or result['status'] == 'failed':
@@ -298,7 +301,9 @@ def main():
         print("Query found no matchups")
         exit(0)
 
-    # get list of sites
+    # examples of manipulating and processing matchup results
+
+    # get list of unique sites present in the results
     gr_sites = {}
     for site in matchups["gr_site"]:
         gr_sites[site]="found"
@@ -307,8 +312,8 @@ def main():
         print("Radar sites present in query return:")
         print(gr_sites.keys())
 
-    # print number of results in dictionary
-    if 'results' in result:
+    # print number of results in dictionary, pick a field and count entries
+    if 'latitude' in matchups:
         num_results = len(matchups['latitude']) # pick a key value to get count of results
         print("number of VN volume matches: ", num_results)
 
@@ -316,8 +321,6 @@ def main():
     #     print("key ", key, " value[0] ", values[0])
     # for key,values in matchups.items():
     #     print("key ", key, " value[-1] ", values[-1])
-    endts = datetime.datetime.now().timestamp()
-    print("end time: ", endts)
 
     # Example: create unique sort order field by combining filename, and volume parameters
     # create index sorted by vn_filename, raynum, scannum, elev
@@ -327,7 +330,7 @@ def main():
     scannum = matchups['scannum']
     elev = matchups['elev']
 
-    # create index dictionary
+    # create index dictionary for sorting
     for cnt in range(len(fnames)):
         sort_str = fnames[cnt]+str(raynum[cnt])+str(scannum[cnt])+str(elev[cnt])
 #        print("cnt ", cnt, " sort str ", sort_str)
@@ -345,6 +348,10 @@ def main():
         print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
               , scannum[sorted_index[i]], ",", elev[sorted_index[i]], file=file1)
     file1.close()
+
+    # elapsed time for metrics
+    endts = datetime.datetime.now().timestamp()
+    print("end time: ", endts)
 
     diff = endts - ts
     print("elapsed time ", diff, "secs")
