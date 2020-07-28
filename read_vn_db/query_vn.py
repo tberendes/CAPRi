@@ -2,8 +2,9 @@
 #
 #  qyery_vn.py
 #
-#  Description: this script queries data from the VN database on AWS and
-#               and parses out the values and formats output for JSON
+#  Description: this script queries data from the VN database on AWS and downloads a CSV
+#               result file, then parses out the values into a dictionary.  Optional saving of
+#               the CSV file is supported
 #
 #  Syntax: currently no input parameters
 #
