@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------------------------------------
 #
-#  qyery_vn.py
+#  query_vn.py
 #
 #  Description: this script queries data from the VN database on AWS and downloads a CSV
 #               result file, then parses out the values into a dictionary.  Optional saving of
