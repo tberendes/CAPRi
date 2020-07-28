@@ -167,7 +167,9 @@ class VNQuery:
     def get_csv(self):
         # check for downloaded results file
         if not self.result_downloaded:
-            self.download_csv()
+            res = self.download_csv()
+            if res['status'] != 'success':
+                return res
         # read downloaded results
         matchupDict = {}
 
