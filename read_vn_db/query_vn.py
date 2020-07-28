@@ -31,7 +31,7 @@ import requests
 url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/'
 url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/result/'
 
-max_retry_count = 30
+max_retry_count = 30000
 retry_interval = 2
 result_page_size = 3000
 
