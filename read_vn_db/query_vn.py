@@ -134,7 +134,7 @@ class VNQuery:
     def download_csv(self):
         res = self.wait_for_query()
         if res['status'] != 'success':
-            return {'status': 'failed', 'message': 'Query execution failed'}
+            return {'status': 'failed', 'message': 'CSV download failed'}
 
         get_response = requests.get(self.result_url, stream=True)
         # file_name = self.result_url.split("/")[-1]
@@ -148,11 +148,15 @@ class VNQuery:
         f.close()
         self.result_downloaded = True
 
+        return {'status':'success', 'message':'Successfully downloaded CSV results'}
+
     def save_csv(self, filename):
         if os.path.exists(self.csv_filename):
             shutil.copy(self.csv_filename, filename)
         else:
             print("Can not copy temporary file ", self.csv_filename, " to ", filename)
+            return {'status': 'failed', 'message': 'Failed to save CSV results'}
+        return {'status': 'success', 'message': 'Successfully saved CSV results'}
 
     def delete_temporary_csv(self):
         if os.path.exists(self.csv_filename):
@@ -180,7 +184,7 @@ class VNQuery:
 
         print("read ", row_cnt, " records")
 
-        return {'status':'success', 'message':'Successfully downloaded CSV results', 'results':matchupDict}
+        return {'status':'success', 'message':'Successfully retrieved CSV results', 'results':matchupDict}
 
     # add a single key,value pair as a filter parameter
     def add_parameter(self, key, value):
@@ -278,18 +282,27 @@ def main():
     # submit query to AWS
     res = query.submit_query()
     if res['status'] != 'success':
-        print("Query failed")
+        print("Query failed: ", res['message'])
         exit(-1)
 
     # download temporary csv file and return parsed results in a dictionary called 'results'
     # check 'status' entry for 'success' or 'failed'
-    query.download_csv()
+    res = query.download_csv()
+    if res['status'] != 'success':
+        print("Download failed: ", res['message'])
+        exit(-1)
 
     # optionally save CSV file
-    query.save_csv("test_csv.csv")
+    res = query.save_csv("test_csv.csv")
+    if res['status'] != 'success':
+        print("Save failed: ", res['message'])
+        exit(-1)
 
     # download (if not already present) and read CSV file and return dictionary with status and results
     result = query.get_csv()
+    if result['status'] != 'success':
+        print("Get results failed: ", result['message'])
+        exit(-1)
 
     if 'status' not in result or result['status'] == 'failed':
         print("Query failed")
