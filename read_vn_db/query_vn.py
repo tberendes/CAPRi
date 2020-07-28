@@ -332,6 +332,7 @@ def main():
         num_results = len(matchups['latitude']) # pick a key value to get count of results
         print("number of VN volume matches: ", num_results)
 
+    # print first and last matchup values
     # for key,values in matchups.items():
     #     print("key ", key, " value[0] ", values[0])
     # for key,values in matchups.items():
