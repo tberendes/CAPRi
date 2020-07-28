@@ -1,13 +1,13 @@
 # ---------------------------------------------------------------------------------------------
 #
-#  read_vn_db.py
+#  qyery_vn.py
 #
 #  Description: this script queries data from the VN database on AWS and
 #               and parses out the values and formats output for JSON
 #
 #  Syntax: currently no input parameters
 #
-#  To Do: modify to accept input parameters, such as filename and maybe the location of district coordinates
+#  To Do: modify to accept input parameters
 #
 # ---------------------------------------------------------------------------------------------
 
