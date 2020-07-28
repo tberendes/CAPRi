@@ -380,5 +380,8 @@ def main():
     diff = endts - ts
     print("elapsed time ", diff, "secs")
 
+    # delete CSV file if done with it
+    #query.delete_csv()
+
 if __name__ == '__main__':
    main()
