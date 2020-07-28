@@ -15,6 +15,7 @@
 import csv
 import gzip
 import os
+import shutil
 import string
 import sys
 import time
@@ -39,9 +40,28 @@ class VNQuery:
         self.query_id=''
         self.q_params={}
         self.result_url=''
+        self.csv_filename=''
+        self.result_downloaded = False
+
+    def __del__(self):
+        # Destructor: remove temporary file
+        if os.path.exists(self.csv_filename):
+            os.remove(self.csv_filename)
+
+    # convert str to float if it is a viable numeric value, otherwise do nothing (on exception)
+    def str_to_float(self, s):
+        try:
+            s=float(s)
+        except ValueError:
+            pass
+        return s
     def get_params(self):
         return self.params
     def submit_query(self):
+        # delete previous query temporary CSV file is present
+        if self.result_downloaded:
+            self.delete_temporary_csv()
+        self.result_downloaded = False
         try:
             response = requests.get(url_query, params=self.params)
 
@@ -109,124 +129,53 @@ class VNQuery:
 
         return {'status': 'success', 'message': 'Successfully performed query'}
 
-    def get_results(self):
-
-        q_res = self.submit_query()
-        if q_res['status'] != 'success':
-            return {'status': 'failed', 'message': 'Query submission failed'}
-        w_res = self.wait_for_query()
-        if w_res['status'] != 'success':
-            return {'status': 'failed', 'message': 'Query execution failed'}
-        # need to do pagination of results
-        matchupDict = {}
-    #    matchupList = []
-        offset='0'
-        page_token = ''
-        page_count = 1
-        result_cnt = 0
-        while True:
-            # sleep until result is ready or an error has occurred
-            q_params = {'qid': self.query_id, 'page_size':result_page_size}
-            if len(page_token) > 0:
-                print("page token ", page_token)
-    #            token=str(urllib.parse.quote(page_token,safe=''))
-                q_params['page_token']=page_token
-
-            # loop until result is ready or an error has occurred
-            try:
-                response = requests.get(url_result, params=q_params)
-                print("request: ", response.request.url)
-                # If the response was successful, no Exception will be raised
-                response.raise_for_status()
-            except requests.HTTPError as http_err:
-                print(f'HTTP error occurred: {http_err}')  # Python 3.6
-            except Exception as err:
-                print(f'Other error occurred: {err}')  # Python 3.6
-
-            #r = requests.get(url_result, params=q_params)
-            #print(r)
-            result = response.json()
-            #result = json.loads(r.text)
-            #print(result)
-            #print(data['result'])
-            # Process the payload or add it to a list
-            if str(result['status']).lower() == 'error':
-                print("Error: ", result['message'])
-                print("Query parameters used: ", q_params)
-                return {'status': 'failed', 'message': 'bad query'}
-
-            #print("result: ", result)
-            for entry in result['data']:
-    #            matchupList.append(entry)
-                for key,value in entry.items():
-                    if key not in matchupDict:
-                        matchupDict[key] = []
-                    matchupDict[key].append(value)
-                result_cnt = result_cnt+1
-
-                #print("entry: ", entry)
-            if 'page_token' in result:
-                page_token = result['page_token']
-            else:
-                break
-            page_count = page_count + 1
-
-        print("processed ", page_count, " pages")
-        print("read ", result_cnt, " records")
-        return {'status':'success', 'message':'success', 'results':matchupDict}
-
     def download_csv(self):
-        q_res = self.submit_query()
-        if q_res['status'] != 'success':
-            return {'status': 'failed', 'message': 'Query submission failed'}
-        w_res = self.wait_for_query()
-        if w_res['status'] != 'success':
+        res = self.wait_for_query()
+        if res['status'] != 'success':
             return {'status': 'failed', 'message': 'Query execution failed'}
 
         get_response = requests.get(self.result_url, stream=True)
-        #file_name = self.result_url.split("/")[-1]
+        # file_name = self.result_url.split("/")[-1]
         f = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
-#        with open(file_name, 'wb') as f:
+        #        with open(file_name, 'wb') as f:
         for chunk in get_response.iter_content(chunk_size=1024):
             if chunk:  # filter out keep-alive new chunks
                 f.write(chunk)
-        fname = f.name
-        print("fname ",fname)
+        self.csv_filename = f.name
+        print("fname ", self.csv_filename)
         f.close()
-        #f.seek(0)
+        self.result_downloaded = True
+
+    def save_csv(self, filename):
+        if os.path.exists(self.csv_filename):
+            shutil.copy(self.csv_filename, filename)
+        else:
+            print("Can not copy temporary file ", self.csv_filename, " to ", filename)
+
+    def delete_temporary_csv(self):
+        if os.path.exists(self.csv_filename):
+            os.remove(self.csv_filename)
+        else:
+            print("Can not delete temporary file ", self.csv_filename)
+
+    def get_csv(self):
+        # check for downloaded results file
+        if not self.result_downloaded:
+            self.download_csv()
+        # read downloaded results
         matchupDict = {}
 
         row_cnt = 0
-        # with open(fname, "r") as f:
-        #     reader = csv.reader(f)
-        #     keys=[]
-        #     for line in reader:
-        #         if row_cnt == 0:
-        #             for key in line:
-        #                 keys.append(key)
-        #         else:
-        #             for i in range(len(keys)):
-        #                 if keys[i] not in matchupDict:
-        #                     matchupDict[keys[i]] = []
-        #                 matchupDict[keys[i]].append(line[i])
-        #         row_cnt = row_cnt + 1
-        #     row_cnt = row_cnt - 1 # subtract one for header line
-        # f.close()
-
-        with open(fname) as f:
+        with open(self.csv_filename) as f:
             # parse CSV file
             for row in csv.DictReader(f):
                 for key, value in row.items():
                     if key not in matchupDict:
                         matchupDict[key] = []
-                    matchupDict[key].append(value)
+                    matchupDict[key].append(self.str_to_float(value))
                 row_cnt = row_cnt + 1
         f.close()
 
-        if os.path.exists(fname):
-            os.remove(fname)
-        else:
-            print("Can not delete temporary file ", fname)
         print("read ", row_cnt, " records")
 
         return {'status':'success', 'message':'Successfully downloaded CSV results', 'results':matchupDict}
@@ -290,14 +239,6 @@ class VNQuery:
         self.params['min_site_fp_count'] = min
         self.params['max_site_fp_count'] = max
 
-    # convert str to float if it is a viable numeric value, otherwise do nothing (on exception)
-    def str_to_float(s):
-        try:
-            s=float(s)
-        except ValueError:
-            pass
-        return s
-
 def main():
 
     ts = datetime.datetime.now().timestamp()
@@ -307,7 +248,7 @@ def main():
     query = VNQuery() # initialize query parameters
     query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
 
-    #available filter methods:
+    #Various available filter methods, can use in any combination:
 
     #query.set_gr_site("KFSD")
     # query.set_lat_lon_box(start_lat, end_lat, start_lon, end_lon)
@@ -331,13 +272,27 @@ def main():
 
     #exit(0)
 
-    result = query.get_results()
-    #result = query.download_csv()
+    # submit query to AWS
+    res = query.submit_query()
+    if res['status'] != 'success':
+        print("Query failed")
+        exit(-1)
+
+    # downoad temporary csv file and return parsed results in a dictionary called 'results'
+    # check 'status' entry for 'success' or 'failed'
+    query.download_csv()
+
+    # save CSV file
+    query.save_csv("test_csv.csv")
+
+    # read downloaded CSV file and return dictionary
+    result = query.get_csv()
 
     if 'status' not in result or result['status'] == 'failed':
         print("Query failed")
         exit(-1)
     if 'results' in result:
+        # extract matchups dictionary from result dictionary
         matchups = result['results']
     else:
         print("Query found no matchups")
@@ -364,7 +319,7 @@ def main():
     endts = datetime.datetime.now().timestamp()
     print("end time: ", endts)
 
-    #for validation experiment, create unique sort order field by combining filename, and volume parameters
+    # Example: create unique sort order field by combining filename, and volume parameters
     # create index sorted by vn_filename, raynum, scannum, elev
     sort_dict = {}
     fnames = matchups['vn_filename']
@@ -374,7 +329,7 @@ def main():
 
     # create index dictionary
     for cnt in range(len(fnames)):
-        sort_str = fnames[cnt]+raynum[cnt]+scannum[cnt]+elev[cnt]
+        sort_str = fnames[cnt]+str(raynum[cnt])+str(scannum[cnt])+str(elev[cnt])
 #        print("cnt ", cnt, " sort str ", sort_str)
         sort_dict[sort_str] = cnt
 
@@ -383,118 +338,18 @@ def main():
     for fname in sorted(sort_dict):
         sorted_index.append(sort_dict[fname])
 
-    file1 = open("stream_test.txt", "w")  # write mode
-#    file1 = open("csv_file_test_dict.txt", "w")  # write mode
-#    file1 = open("csv_file_test_reader.txt", "w")  # write mode
-
+    file1 = open("sort_test.txt", "w")  # write mode
     for i in range(len(fnames)):
         print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
               , scannum[sorted_index[i]], ",", elev[sorted_index[i]])
         print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
               , scannum[sorted_index[i]], ",", elev[sorted_index[i]], file=file1)
-
-#     for key,values in matchups.items():
-#         for i in range(len(values)):
-#             print(i, " ", key, " ", values[sorted_index[i]])
-#             print(i, " ", key, " ", values[sorted_index[i]], file=file1)
     file1.close()
 
     diff = endts - ts
     print("elapsed time ", diff, "secs")
 
+    query.delete_temporary_csv()
+
 if __name__ == '__main__':
    main()
-
-# API’s to trigger the lambdas:
-# Eg: For getting average precipitation over total data,
-# 1. https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/?inputQueryString
-# =avg(preciprate)
-# Output:
-# { "success" : true,
-# "queryID" : "0b392dd6-2478-474d-9e63-a22beaa71fe4" }
-# Give the Resultant Query Execution Id to the below URL
-#
-# 2. https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/result?qid=<qid>
-# Eg:
-# https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/dev/result?qid=0b392
-# dd6-2478-474d-9e63-a22beaa71fe4
-# Output:
-# {"Status": "Success", "Result": [{"_col0":
-# "1.9659063383908282"}]}
-#
-# 3. Athena:
-# Crawler: capri_parquet
-# Source Data S3 bucket: capri-data/parquet
-# Result Data S3 bucket: aws-athena-query-results-capri-real-time
-# Database: capri_real_time_query
-# Table: parquet
-# Corresponding SQL for the above API :
-# SELECT AVG(preciprate) FROM "capri_real_time_query"."parquet";
-
-# start_time	time	Parameters which will be queried by their minimum and maximum range
-# end_time	time
-# start_lat	Latitude
-# end_lat	Latitude
-# start_lon	Longitude
-# end_lon	Longitude
-# min_zfact_measured	zfactormeasured
-# max_zfact_measured	zfactormeasured
-# min_zfact_corrected	zfactorcorrected
-# max_zfact_corrected	zfactorcorrected
-# min_grz	gr_z
-# max_grz	gr_z
-# min_dm	dm
-# max_dm	dm
-# min_gr_dm	gr_dm
-# max_gr_dm	gr_dm
-# min_site_percent_rainy	site_percent_rainy
-# max_site_percent_rainy	site_percent_rainy
-# min_site_fp_count	site_fp_count
-# max_site_fp_count	site_fp_count
-# start_ray_num	raynum	Parameters which will be queried to have either outer coverage range or inner coverage range , Assumption : For the below parameters , there exists another swath parameter, for eg: swath="outer" or swath = "inner" for rayNum
-# end_ray_num	raynum
-# scan_like	scan	Parameters which will be queried by the presence/absence of some strings/substrings
-# scan_not_like	scan
-# gr_site_like	gr_site
-# gr_site_not_like	gr_site
-# vn_filename_like	vn_filename
-# vn_filename_not_like	vn_filename
-# gpm_ver_like	gpm_ver
-# gpm_ver_not_like	gpm_ver
-# vn_ver_like	vn_ver
-# vn_ver_not_like	vn_ ver
-# sensor_like	sensor
-# sensor_not_like	sensor
-
-
-# API Endpoint
-# /?start_time="2014-03-21 03:51:26"&end_time= "2020-03-21 03:51:26"
-# /?start_lat=19&end_lat=64&start_lon=-161&end_lon=-68
-# /?start_ray_num=2&end_ray_num=8&swath="outer"
-# /?start_ray_num=2&end_ray_num=8
-# /?start_ray_num=2&end_ray_num=8&swath="inner"
-# /?gpm_ver_like="V06A"
-# /?vn_ver_like=1.21
-# /?scan_like=NS
-# /?sensor_like=DPR
-# /?gr_site_like=K%
-# /?gr_site_like=%R
-# /?gr_site_like=%AB%
-# /?gr_site_not_like=K%
-# /?gr_site_like=KI%,KM%,KF%
-# /?gr_site_not_like=KI%,KM%,KF%
-# gr_site_not_like=KI%,KM%,KF%&gr_site_like=%J,%C
-# /?vn_filename_like=%KARX%
-# /?min_zfact_measured=20&max_zfact_measured=40
-# /?min_zfact_corrected=20&max_zfact_corrected=40
-#  /?min_grz=20&max_grz=40
-# /?min_dm=1.99&max_dm=2.01
-# /?min_gr_dm=0.99&max_gr_dm=1.01
-# /?min_site_percent_rainy=6&max_site_percent_rainy=7
-# /?min_site_fp_count=600&max_site_fp_count=700
-# /?start_ray_num=2&end_ray_num=8&swath="inner"&sensor_not_like=k,l
-# /?start_time="2014-01-01 00:00"&end_time="2020-01-01 59:00"&scan_not_like="K%"
-# /?start_lat=45&end_lon=86&scan_not_like="K%"
-# /?start_ray_num=2&end_ray_num=8&swath="inner"&sensor_not_like=%k,l%&scan_like=K%,N%
-# start_ray_num=2&end_ray_num=8&swath="outer"&sensor_not_like=%k,l%&scan_like=K%,N%
-# /
