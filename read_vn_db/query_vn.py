@@ -45,10 +45,11 @@ class VNQuery:
         self.result_url=''
         self.csv_filename=''
         self.result_downloaded = False
+        self.temp_file_flag = False
 
     def __del__(self):
         # Destructor: remove temporary file
-        if os.path.exists(self.csv_filename):
+        if self.temp_file_flag and os.path.exists(self.csv_filename):
             os.remove(self.csv_filename)
 
     # convert str to float if it is a viable numeric value, otherwise do nothing (on exception)
@@ -132,19 +133,25 @@ class VNQuery:
 
         return {'status': 'success', 'message': 'Successfully performed query'}
 
-    def download_csv(self):
+    def download_csv(self, **kwargs):
+        # file_name = self.result_url.split("/")[-1]
+        f = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
+        self.csv_filename = f.name
+        self.temp_file_flag = True
+        for key, value in kwargs.items():
+            if key == 'filename':
+                self.csv_filename = value
+                self.temp_file_flag = False
+                f = open(self.csv_filename, 'w+b')
         res = self.wait_for_query()
         if res['status'] != 'success':
             return {'status': 'failed', 'message': 'CSV download failed'}
 
         get_response = requests.get(self.result_url, stream=True)
-        # file_name = self.result_url.split("/")[-1]
-        f = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
         #        with open(file_name, 'wb') as f:
         for chunk in get_response.iter_content(chunk_size=1024):
             if chunk:  # filter out keep-alive new chunks
                 f.write(chunk)
-        self.csv_filename = f.name
         print("fname ", self.csv_filename)
         f.close()
         self.result_downloaded = True
@@ -288,20 +295,20 @@ def main():
         print("Query failed: ", res['message'])
         exit(-1)
 
-    # download temporary csv file and return parsed results in a dictionary called 'results'
+    # download csv file, may specify optional filename, if ommitted, uses temporary file
     # check 'status' entry for 'success' or 'failed'
-    res = query.download_csv()
+    res = query.download_csv(filename="test_csv.csv")
     if res['status'] != 'success':
         print("Download failed: ", res['message'])
         exit(-1)
 
-    # optionally save CSV file
-    res = query.save_csv("test_csv.csv")
-    if res['status'] != 'success':
-        print("Save failed: ", res['message'])
-        exit(-1)
+    # optionally save CSV file if temporary filename was used (omitted filename in download_csv)
+    # res = query.save_csv("test_csv.csv")
+    # if res['status'] != 'success':
+    #     print("Save failed: ", res['message'])
+    #     exit(-1)
 
-    # download (if not already present) and read CSV file and return dictionary with status and results
+    # download (if not already downloaded) and read CSV file and return dictionary with status and results
     result = query.get_csv()
     if result['status'] != 'success':
         print("Get results failed: ", result['message'])
@@ -372,8 +379,6 @@ def main():
 
     diff = endts - ts
     print("elapsed time ", diff, "secs")
-
-    query.delete_temporary_csv()
 
 if __name__ == '__main__':
    main()
