@@ -63,7 +63,7 @@ class VNQuery:
         return self.params
     def submit_query(self):
         # delete previous query temporary CSV file is present
-        if self.result_downloaded:
+        if self.temp_file_flag and self.result_downloaded:
             self.delete_temporary_csv()
         self.result_downloaded = False
         try:
