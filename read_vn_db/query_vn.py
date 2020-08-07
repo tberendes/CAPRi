@@ -201,6 +201,8 @@ class VNQuery:
         self.params[key] = value
 
     # convenience functions for common filtering methods
+    def set_columns(self, comma_list):
+        self.params['columns'] = comma_list
     def set_time_range(self, start_time, end_time):
         self.params['start_time'] = start_time
         self.params['end_time'] = end_time
@@ -266,7 +268,7 @@ def main():
 
     # initialize query parameters
     query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
-
+    query.set_columns("time,latitude,longitude,GR_Z,Dm,gr_site,vn_filename,raynum,scannum,elev")
     #Various available filter methods, can use in any combination:
     #query.set_gr_site("KFSD")
     # query.set_lat_lon_box(start_lat, end_lat, start_lon, end_lon)
