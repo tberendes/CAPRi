@@ -119,11 +119,13 @@ def process_file(filename, alt_bright_band):
             varDict_elev_fpdim['latitude'] = nc.variables['latitude'][:]   # elevAngle 	fpdim
             varDict_elev_fpdim['longitude'] = nc.variables['longitude'][:]   # elevAngle 	fpdim
 
-            # Add site elevation to top and bottom height to get MSL values and convert Km to m
+            # All heights are in Km AGL, to get MSL Add site elevation
             site_elev = nc.variables['site_elev'][...]
-            print("site_elev ", site_elev)
-            varDict_elev_fpdim['topHeight'] = 1000.0 * (nc.variables['topHeight'][:] + site_elev)  # elevAngle 	fpdim
-            varDict_elev_fpdim['bottomHeight'] = 1000.0 * (nc.variables['bottomHeight'][:] + site_elev)  # elevAngle 	fpdim
+            print("site_elev ", site_elev) # km
+#            varDict_elev_fpdim['topHeight'] = 1000.0 * (nc.variables['topHeight'][:] + site_elev)  # elevAngle 	fpdim
+#            varDict_elev_fpdim['bottomHeight'] = 1000.0 * (nc.variables['bottomHeight'][:] + site_elev)  # elevAngle 	fpdim
+            varDict_elev_fpdim['topHeight'] = nc.variables['topHeight'][:] # elevAngle 	fpdim
+            varDict_elev_fpdim['bottomHeight'] = nc.variables['bottomHeight'][:] # elevAngle 	fpdim
 
             # Ground radar hydrometeor id histograms
             hid = nc.variables['GR_HID'][:]   # elevAngle 	fpdim 	hidim
@@ -133,10 +135,13 @@ def process_file(filename, alt_bright_band):
             varDict_fpdim['piaFinal'] = nc.variables['piaFinal'][:]   # fpdim
             varDict_fpdim['PrecipRateSurface'] =  nc.variables['PrecipRateSurface'][:]  # fpdim
             varDict_fpdim['SurfPrecipTotRate'] =  nc.variables['SurfPrecipTotRate'][:]  # fpdim
-            varDict_fpdim['heightStormTop'] = nc.variables['heightStormTop'][:]   # fpdim
+#            varDict_fpdim['heightStormTop'] = nc.variables['heightStormTop'][:]   # fpdim
+            varDict_fpdim['heightStormTop'] = (nc.variables['heightStormTop'][:] / 1000.0) - site_elev  # fpdim
             varDict_fpdim['scanNum'] =  nc.variables['scanNum'][:]  # fpdim
             varDict_fpdim['rayNum'] =  nc.variables['rayNum'][:]  # fpdim
-            varDict_fpdim['BBheight'] =  nc.variables['BBheight'][:]  # fpdim
+#            varDict_fpdim['BBheight'] =  nc.variables['BBheight'][:]  # fpdim
+            # convert MSL to AGL
+            varDict_fpdim['BBheight'] =  (nc.variables['BBheight'][:] / 1000.0) - site_elev  # fpdim
             varDict_fpdim['BBstatus'] =  nc.variables['BBstatus'][:]  # fpdim
             varDict_fpdim['TypePrecip'] =  nc.variables['TypePrecip'][:]  # fpdim
 
@@ -211,7 +216,8 @@ def process_file(filename, alt_bright_band):
                     fp_entry={"GPM_ver": GPM_VERSION, "VN_ver": vn_version, "scan": SCAN_TYPE, "sensor": GPM_SENSOR,
                               "GR_site": GR_site,"time": closestTime, "elev":float(elevationAngle[elev]),
                               "vn_filename":VN_filename, "site_percent_rainy":percent_rainy,
-                              "site_rainy":site_rainy_count, "site_fp_count":fpdim, "ruc_0_height":alt_BB_height}
+                              "site_rainy_count":site_rainy_count, "site_fp_count":fpdim, "ruc_0_height":alt_BB_height,
+                              "site_elev":site_elev}
 
                     for fp_key in varDict_fpdim:
                         fp_entry[fp_key]=float(ma.getdata(varDict_fpdim[fp_key])[fp])
@@ -253,7 +259,8 @@ def read_alt_bb_file(filename):
         for row in readCSV:
             radar_id=row[0]
             orbit = int(row[1])
-            height = 1000.0 * float(row[2]) # in meters
+#            height = 1000.0 * float(row[2]) # in meters
+            height = float(row[2]) # in km
             if radar_id not in alt_bb_dict.keys():
                 alt_bb_dict[radar_id] = {}
             alt_bb_dict[radar_id][orbit] = height
@@ -282,14 +289,14 @@ def main():
     #             client.upload_file(local_path, bucket, s3_path)
 
     VN_DIR = '/media/sf_berendes/capri_test_data/VN/mrms_geomatch'
-    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet'
+    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet_8_18'
     META_DIR = '/media/sf_berendes/capri_test_data/meta'
     alt_bb_file = '/media/sf_berendes/capri_test_data/BB/GPM_rain_event_bb_km.txt'
     s3_bucket = 'capri-data'
     upload_bin = False
     upload_img = False
     upload_parquet_meta = True
-    overwrite_flag = True
+    overwrite_flag = False
 
     #client = boto3.client('s3')
     bright_band = read_alt_bb_file(alt_bb_file)
@@ -310,7 +317,7 @@ def main():
                     write_parquet(parquet_data, os.path.join(OUT_DIR,file+'.parquet'), compression='snappy')
 
                     #print("uploading parquet "+os.path.join(OUT_DIR,file+'.parquet'))
-                    parquet_key = 'parquet_new/'+file+'.parquet'
+                    parquet_key = 'parquet_8_18/'+file+'.parquet'
                     upload_s3(os.path.join(OUT_DIR,file+'.parquet',), s3_bucket, parquet_key,overwrite_flag)
 
                     with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
