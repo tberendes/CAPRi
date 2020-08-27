@@ -46,6 +46,9 @@ class VNQuery:
         self.csv_filename=''
         self.result_downloaded = False
         self.temp_file_flag = False
+        self.min_list=[]
+        self.max_list=[]
+        self.diff_list=[]
 
     def __del__(self):
         # Destructor: remove temporary file
@@ -59,13 +62,36 @@ class VNQuery:
         except ValueError:
             pass
         return s
+
     def get_params(self):
         return self.params
+
+    def make_comma_list(self,strlist):
+        comma_list=''
+        for element in strlist:
+            if len(comma_list) >0:
+                comma_list=comma_list+','+element
+            else:
+                comma_list=element
+        return comma_list
+    def finalize_params(self):
+        # add in range and difference parameters
+        min_param = self.make_comma_list(self.min_list)
+        if len(min_param) >0:
+            self.params['min']=min_param
+        max_param = self.make_comma_list(self.max_list)
+        if len(max_param) >0:
+            self.params['max']=max_param
+        diff_param = self.make_comma_list(self.diff_list)
+        if len(diff_param) >0:
+            self.params['difference']=diff_param
+
     def submit_query(self):
         # delete previous query temporary CSV file is present
         if self.temp_file_flag and self.result_downloaded:
             self.delete_csv()
         self.result_downloaded = False
+        self.finalize_params()
         try:
             response = requests.get(url_query, params=self.params)
 
@@ -230,6 +256,7 @@ class VNQuery:
         self.params['scan_like'] = type
     def set_sensor(self,type):
         self.params['sensor_like'] = type
+
     # can also use % as a wildcard, i.e. site="K%" and list of sites i.e. site="KI%,KM%,KF%"
     def set_gr_site(self,site):
         self.params['gr_site_like'] = site
@@ -256,6 +283,28 @@ class VNQuery:
     def set_site_fp_count_range(self,min,max):
         self.params['min_site_fp_count'] = min
         self.params['max_site_fp_count'] = max
+
+    def add_min_filter(self,variable,min):
+        self.min_list.append(variable)
+        self.min_list.append(str(min))
+    def add_max_filter(self,variable,max):
+        self.max_list.append(variable)
+        self.max_list.append(str(max))
+    def add_range_filter(self,variable,min,max):
+        self.add_min_filter(variable,min)
+        self.add_max_filter(variable,max)
+    def add_difference_threshold_filter(self,variable1, variable2, relation, value):
+        self.diff_list.append(variable1)
+        self.diff_list.append(relation)
+        self.diff_list.append(variable2)
+        self.diff_list.append(str(value))
+        #from Pooja:
+        #difference = col1, comparator, col2, value, col2, comparator, col4, value
+        #I have made a group of 4, each  with col1,comparator,col2,value which generates
+        # col1 - col2 comparator(<,>,>=<,>=) value. The comparators mapped  are
+        # {“gte”:“>=“, “lte”:“<=“, “lt”: “<”, “gt”: “>”, “eq”: “=”} . For example :
+        # difference= topheight,lt,ruc_0_height,4,bottomheight,gte,ruc_0_height,5,hid1,eq,hid2,6 will
+        # generate clauses topheight - ruc_0_height < 4 AND bottomheight - ruc_0_height >= 5 AND hid1 - hid2 = 6
 
 def main():
 
@@ -288,8 +337,16 @@ def main():
     # query.set_site_percent_rainy_range(min,max)
     # query.set_site_fp_count_range(min,max)
 
-    #print(query.get_params())
+    #Here’s what I have in mind for this…specify the parameter ‘topheight_below_ruc_0’=[some_value]
+    # and it queries the ruc_0_height column and topHeight column and returns the results
+    # where topHeight-ruc_0_height < [some_value]. Similarly for the bottomHeight…’bottomheight_above_ruc_0’=[some_value]
+    # which queries the ruc_0_height and bottomHeight columns and returns results where bottomHeight-ruc_0_height > [some_value].
 
+    # can use 'lt', 'lte', 'gt', 'gte', 'eq' for relation
+    query.add_difference_threshold_filter('topHeight', 'ruc_0_height', 'lt', 1)
+    #query.add_difference_threshold_filter('bottomHeight', 'ruc_0_height', 'gt', 1)
+
+    #query.add_range_filter('ruc_0_height', 0.0, 2.0)
 
     # submit query to AWS
     res = query.submit_query()
@@ -319,6 +376,10 @@ def main():
         # extract matchups dictionary from result dictionary
         matchups = result['results']
     else:
+        print("Query found no matchups")
+        exit(0)
+
+    if len(matchups)==0:
         print("Query found no matchups")
         exit(0)
 
@@ -365,8 +426,8 @@ def main():
 
     file1 = open("sort_test.txt", "w")  # write mode
     for i in range(len(fnames)):
-        print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
-              , scannum[sorted_index[i]], ",", elev[sorted_index[i]])
+        #print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
+        #      , scannum[sorted_index[i]], ",", elev[sorted_index[i]])
         print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
               , scannum[sorted_index[i]], ",", elev[sorted_index[i]], file=file1)
     file1.close()
