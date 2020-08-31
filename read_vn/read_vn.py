@@ -12,38 +12,29 @@
 # ---------------------------------------------------------------------------------------------
 
 
+import csv
 # --Do all the necessary imports
 import gzip
 import os
-import statistics
+import random
 import string
 import sys
-import tempfile
+from io import BytesIO
 
 import boto3 as boto3
+import certifi
+import urllib3
+import json2parquet
+#from json2parquet import ingest_data, write_parquet
 from netCDF4 import Dataset as NetCDFFile
 from netCDF4 import chartostring
+import numpy as np
 from numpy import ma
-import urllib3
-import certifi
-import requests
-from io import BytesIO
-import random
-from json2parquet import load_json, ingest_data, write_parquet, write_parquet_dataset
-import csv
 
 ingest_url = 'https://6inm6whnni.execute-api.us-east-1.amazonaws.com/default/ingest_vn_data'
 api_key = 'LakZ1uMrR465m1GQKoQhQ7Ig3bwr7wyPavUZ9mEc'
 
 import json
-from matplotlib.patches import Polygon
-import matplotlib.path as mpltPath
-import uuid
-from urllib.parse import unquote_plus
-import datetime
-from datetime import date
-from datetime import timedelta
-from util.util import load_json_from_s3, update_status_on_s3
 
 #s3 = boto3.resource(
 #    's3')
@@ -85,8 +76,44 @@ def post_http_data(request):
         sys.exit(1)
     return response
 
+def compute_mean_BB(BBheight, BBquality, BBraintype):
+    fpdim = len(BBheight)
+    mean = 0.0
+    count = 0
+    for fp in range(fpdim-1):
+        if BBheight[fp] > 0 and BBraintype[fp] == 1 and BBquality[fp] == 1:
+            mean = mean + BBheight[fp]
+            count = count + 1
+    if count == 0:
+        return -9999.0
+    else:
+        return mean / count
+def compute_BB_prox(meanBB, top, botm):
+    #print("meanBB ", meanBB, " top ", top, " bottom ", botm)
+    bbwidth=0.750
+    htcat = -9999
+    if meanBB > 0.0:
+        if botm > (meanBB+bbwidth):
+            htcat = 3 # above BB
+        if top > 0.0 and top < (meanBB-bbwidth):
+            htcat = 1 # below BB
+        if botm <= (meanBB+bbwidth) and top >= (meanBB-bbwidth):
+            htcat = 2  # within BB
+    return htcat
+       # num_in_BB_Cat = LONARR(4)
+       # idxabv = WHERE( botm GT (meanbb+bbwidth), countabv )
+       # num_in_BB_Cat[3] = countabv
+       # IF countabv GT 0 THEN bbProx[idxabv] = 3
+       # idxblo = WHERE( ( top GT 0.0 ) AND ( top LT (meanbb-bbwidth) ), countblo )
+       # num_in_BB_Cat[1] = countblo
+       # IF countblo GT 0 THEN bbProx[idxblo] = 1
+       # idxin = WHERE( (botm LE (meanbb+bbwidth)) AND (top GE (meanbb-bbwidth)), countin )
+       # num_in_BB_Cat[2] = countin
+       # IF countin GT 0 THEN bbProx[idxin] = 2
+
 def process_file(filename, alt_bright_band):
 
+    outputJson = []
     with gzip.open(filename) as gz:
         with NetCDFFile('dummy', mode='r', memory=gz.read()) as nc:
             #print(nc.variables)
@@ -119,9 +146,20 @@ def process_file(filename, alt_bright_band):
             varDict_elev_fpdim['latitude'] = nc.variables['latitude'][:]   # elevAngle 	fpdim
             varDict_elev_fpdim['longitude'] = nc.variables['longitude'][:]   # elevAngle 	fpdim
 
+# # expected/rejected, beam filling param for GR and DPR
+#             varDict_elev_fpdim['n_gr_z_rejected'] = nc.variables['n_gr_z_rejected'][:]   # elevAngle 	fpdim
+#             varDict_elev_fpdim['n_gr_expected'] = nc.variables['n_gr_expected'][:]   # elevAngle 	fpdim
+#             varDict_elev_fpdim['n_dpr_corr_z_rejected'] = nc.variables['n_dpr_corr_z_rejected'][:]   # elevAngle 	fpdim
+#             varDict_elev_fpdim['n_dpr_expected'] = nc.variables['n_dpr_expected'][:]   # elevAngle 	fpdim
+
+            have_blockage = int(ma.getdata(nc.variables['have_GR_blockage']).data)
+            print("have_blockage ",have_blockage)
+
             # All heights are in Km AGL, to get MSL Add site elevation
-            site_elev = nc.variables['site_elev'][...]
+#            site_elev = ma.getdata(nc.variables['site_elev'][...]).data
+            site_elev = float(ma.getdata(nc.variables['site_elev']).data)
             print("site_elev ", site_elev) # km
+            #exit(0)
 #            varDict_elev_fpdim['topHeight'] = 1000.0 * (nc.variables['topHeight'][:] + site_elev)  # elevAngle 	fpdim
 #            varDict_elev_fpdim['bottomHeight'] = 1000.0 * (nc.variables['bottomHeight'][:] + site_elev)  # elevAngle 	fpdim
             varDict_elev_fpdim['topHeight'] = nc.variables['topHeight'][:] # elevAngle 	fpdim
@@ -192,7 +230,6 @@ def process_file(filename, alt_bright_band):
             fpdim = nc.variables['GR_HID'].shape[1]
             hidim = nc.variables['GR_HID'].shape[2]
 
-            outputJson = []
             count=0
             site_rainy_count = 0
             for fp in range(fpdim - 1):
@@ -206,6 +243,18 @@ def process_file(filename, alt_bright_band):
             percent_rainy = 100.0 * float(site_rainy_count)/float(fpdim)
             print ("percent rainy ", percent_rainy)
 
+            # compute mean BB
+            meanBB = compute_mean_BB(varDict_fpdim['BBheight'], varDict_fpdim['BBstatus'],varDict_fpdim['TypePrecip'])
+            if meanBB < 0.0:
+                if alt_BB_height > 0.0:
+                    meanBB = alt_BB_height
+                    print("missing Bright band, using Ruc_0 height ", meanBB)
+                else:
+                    meanBB = -9999.0
+                    print("missing Bright band and Ruc_0 height...")
+            else:
+                print("Mean Bright band ", meanBB)
+
             for elev in range(elevations-1):
                 for fp in range(fpdim-1):
                     # only use matchup volumes > minimimum rain rate
@@ -217,7 +266,7 @@ def process_file(filename, alt_bright_band):
                               "GR_site": GR_site,"time": closestTime, "elev":float(elevationAngle[elev]),
                               "vn_filename":VN_filename, "site_percent_rainy":percent_rainy,
                               "site_rainy_count":site_rainy_count, "site_fp_count":fpdim, "ruc_0_height":alt_BB_height,
-                              "site_elev":site_elev}
+                              "site_elev":site_elev, "meanBB":meanBB}
 
                     for fp_key in varDict_fpdim:
                         fp_entry[fp_key]=float(ma.getdata(varDict_fpdim[fp_key])[fp])
@@ -225,6 +274,38 @@ def process_file(filename, alt_bright_band):
                         fp_entry[fp_elev_key] = float(ma.getdata(varDict_elev_fpdim[fp_elev_key][elev])[fp])
                     for id in range(hidim-1):
                         fp_entry["hid_"+str(id+1)] = int(ma.getdata(hid[elev][fp])[id])
+                    if have_blockage == 1:
+                        fp_entry['GR_blockage'] = float(ma.getdata(nc.variables['GR_blockage'][elev])[fp])
+                    else:
+                        fp_entry['GR_blockage'] = -9999.0
+
+                    # compute BB proximity
+                    #            varDict_elev_fpdim['topHeight'] = nc.variables['topHeight'][:] # elevAngle 	fpdim
+                    #               varDict_elev_fpdim['bottomHeight'] = nc.variables['bottomHeight'][:] # elevAngle 	fpdim
+
+                    bbprox = compute_BB_prox(meanBB, float(ma.getdata(varDict_elev_fpdim['topHeight'][elev])[fp]),
+                                             float(ma.getdata(varDict_elev_fpdim['bottomHeight'][elev])[fp]))
+                    fp_entry['BBprox'] = bbprox
+
+                    # compute s2ku adjusted GR_Z
+                    GR_Z = float(ma.getdata(varDict_elev_fpdim['GR_Z'][elev])[fp])
+                    if bbprox == 3: # above BB, snow adjustment
+                        GR_Z_s2ku = 0.185074 + 1.01378 * GR_Z - 0.00189212 * GR_Z**2   # snow
+                    elif bbprox == 1: # below BB, rain adjustment
+                        GR_Z_s2ku = -1.50393 + 1.07274 * GR_Z + 0.000165393 * GR_Z**2  #  rain
+                    else:  # within BB
+                        GR_Z_s2ku = -9999.0
+                    fp_entry['GR_Z_s2ku'] = GR_Z_s2ku
+
+                    # expected/rejected, beam filling param for GR and DPR
+                    gr_exp = float(ma.getdata(nc.variables['n_gr_expected'][elev])[fp])
+                    gr_rej = float(ma.getdata(nc.variables['n_gr_z_rejected'][elev])[fp])
+                    dpr_exp = float(ma.getdata(nc.variables['n_dpr_expected'][elev])[fp])
+                    dpr_rej = float(ma.getdata(nc.variables['n_dpr_corr_z_rejected'][elev])[fp])
+
+                    fp_entry['GR_beam'] = 100.0 * (gr_exp - gr_rej)/gr_exp
+                    fp_entry['DPR_beam'] = 100.0 * (dpr_exp - dpr_rej)/dpr_exp
+
                     #print(fp_entry)
                     #exit(0)
                     outputJson.append(fp_entry)
@@ -289,14 +370,14 @@ def main():
     #             client.upload_file(local_path, bucket, s3_path)
 
     VN_DIR = '/media/sf_berendes/capri_test_data/VN/mrms_geomatch'
-    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet_8_18'
+    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet_3_31'
     META_DIR = '/media/sf_berendes/capri_test_data/meta'
     alt_bb_file = '/media/sf_berendes/capri_test_data/BB/GPM_rain_event_bb_km.txt'
     s3_bucket = 'capri-data'
     upload_bin = False
     upload_img = False
     upload_parquet_meta = True
-    overwrite_flag = False
+    overwrite_flag = True
 
     #client = boto3.client('s3')
     bright_band = read_alt_bb_file(alt_bb_file)
@@ -312,12 +393,13 @@ def main():
                     if len(outputJson) == 0:
                         print("found no precip in file " + file + " skipping...")
                         continue
-                    parquet_data = ingest_data(outputJson)
+                    #print(outputJson)
+                    parquet_data = json2parquet.ingest_data(outputJson)
                     os.makedirs(os.path.join(OUT_DIR), exist_ok=True)
-                    write_parquet(parquet_data, os.path.join(OUT_DIR,file+'.parquet'), compression='snappy')
+                    json2parquet.write_parquet(parquet_data, os.path.join(OUT_DIR,file+'.parquet'), compression='snappy')
 
                     #print("uploading parquet "+os.path.join(OUT_DIR,file+'.parquet'))
-                    parquet_key = 'parquet_8_18/'+file+'.parquet'
+                    parquet_key = 'parquet_8_31/'+file+'.parquet'
                     upload_s3(os.path.join(OUT_DIR,file+'.parquet',), s3_bucket, parquet_key,overwrite_flag)
 
                     with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
@@ -325,7 +407,7 @@ def main():
                     json_file.close()
 
                     metadata = { "vn_filename":outputJson[0]["vn_filename"], "time": outputJson[0]["time"],
-                                 "site_rainy": outputJson[0]["site_rainy"], "site_fp_count": outputJson[0]["site_fp_count"],
+                                 "site_rainy_count": outputJson[0]["site_rainy_count"], "site_fp_count": outputJson[0]["site_fp_count"],
                                  "site_percent_rainy":outputJson[0]["site_percent_rainy"]}
                     os.makedirs(os.path.join(META_DIR), exist_ok=True)
                     with open(os.path.join(META_DIR,file+'.meta.json'), 'w') as json_file:
