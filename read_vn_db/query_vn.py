@@ -70,7 +70,7 @@ class VNQuery:
         comma_list=''
         for element in strlist:
             if len(comma_list) >0:
-                comma_list=comma_list+','+element
+                comma_list=comma_list+','+str(element)
             else:
                 comma_list=element
         return comma_list
@@ -92,6 +92,10 @@ class VNQuery:
             self.delete_csv()
         self.result_downloaded = False
         self.finalize_params()
+        #print("min_list", self.min_list)
+        #print("max_list", self.max_list)
+        #print("diff_list", self.diff_list)
+        #print("params", self.params)
         try:
             response = requests.get(url_query, params=self.params)
 
@@ -286,10 +290,12 @@ class VNQuery:
 
     def add_min_filter(self,variable,min):
         self.min_list.append(variable)
-        self.min_list.append(str(min))
+#        self.min_list.append(str(min))
+        self.min_list.append(min)
     def add_max_filter(self,variable,max):
         self.max_list.append(variable)
-        self.max_list.append(str(max))
+        self.max_list.append(max)
+#        self.max_list.append(str(max))
     def add_range_filter(self,variable,min,max):
         self.add_min_filter(variable,min)
         self.add_max_filter(variable,max)
@@ -297,7 +303,8 @@ class VNQuery:
         self.diff_list.append(variable1)
         self.diff_list.append(relation)
         self.diff_list.append(variable2)
-        self.diff_list.append(str(value))
+#        self.diff_list.append(str(value))
+        self.diff_list.append(value)
         #from Pooja:
         #difference = col1, comparator, col2, value, col2, comparator, col4, value
         #I have made a group of 4, each  with col1,comparator,col2,value which generates
@@ -306,18 +313,58 @@ class VNQuery:
         # difference= topheight,lt,ruc_0_height,4,bottomheight,gte,ruc_0_height,5,hid1,eq,hid2,6 will
         # generate clauses topheight - ruc_0_height < 4 AND bottomheight - ruc_0_height >= 5 AND hid1 - hid2 = 6
 
+    # can pick only one of the following, last one called overrides
+    # above and below BB are defined as above and below 750m of mean brightband
+    def set_above_bb(self):
+        self.add_range_filter('BBprox',3,3)
+        #self.params['BBprox'] = 3
+    def set_below_bb(self):
+        self.add_range_filter('BBprox',1,1)
+        #self.params['BBprox'] = 1
+    def set_within_bb(self):
+        self.add_range_filter('BBprox',2,2)
+        #self.params['BBprox'] = 2
+
+    # can pick only one of the following, last one called overrides
+    def set_convective(self):
+        self.add_range_filter('typePrecip',2,2)
+        #self.params['typePrecip'] = 2
+    def set_stratiform(self):
+        self.add_range_filter('typePrecip',1,1)
+        #self.params['typePrecip'] = 1
+    def set_other_precip(self):
+        self.add_range_filter('typePrecip',3,3)
+        #self.params['typePrecip'] = 3
+
+    # 0-100 values
+    def set_beam_filling_thresh_gr(self,value):
+        self.add_min_filter('GR_beam',value)
+    def set_beam_filling_thresh_dpr(self,value):
+        self.add_min_filter('DPR_beam',value)
+    # both
+    def set_beam_filling_thresh(self,value):
+        self.add_min_filter('DPR_beam',value)
+        self.add_min_filter('GR_beam',value)
+
+    # 0-100 values
+    def set_blockage_thresh_gr(self,value):
+        self.add_max_filter('GR_blockage',value)
+
 def main():
 
     ts = datetime.datetime.now().timestamp()
     print("start time: ", ts)
 
 #    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-21 00:00:00"}
-    # initialize query class
+    # initialize query class to start a new query
     query = VNQuery()
 
     # initialize query parameters
     query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
-    query.set_columns("time,latitude,longitude,GR_Z,Dm,gr_site,vn_filename,raynum,scannum,elev")
+    query.set_columns("time,latitude,longitude,GR_Z,Dm,gr_site,vn_filename,raynum,scannum,elev,typePrecip,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
+    # added new column for s2ku adjusted GR reflectivity
+    # column:  'GR_Z_s2ku'
+
     #Various available filter methods, can use in any combination:
     #query.set_gr_site("KFSD")
     # query.set_lat_lon_box(start_lat, end_lat, start_lon, end_lon)
@@ -336,6 +383,26 @@ def main():
     # query.set_gr_dm_range(min,max)
     # query.set_site_percent_rainy_range(min,max)
     # query.set_site_fp_count_range(min,max)
+
+    # convenience functions for setting up filtering options commonly used in VN analysis
+    # query.set_beam_filling_thresh_gr(value_0_100)
+    # query.set_beam_filling_thresh_dpr(value_0_100)
+    # query.set_beam_filling_thresh(value_0_100)
+    # query.set_blockage_thresh(value_0_100)
+
+    # These filters can be used in combination to replicate the filtering of our old IDL plots
+    # I tried to duplicate the algorithms Bob used in the IDL code and created a meanBB variable for each
+    # netCDF file which is what Bob used for BB calculations.  The BBprox and DPR_beam and
+    # GR_beam variables are created using my best interpretation of his IDL code.  I have also tried to
+    # implement the GR blockage parameter (if present) and the alternative BB based on Ruc 0 height soundings
+    # as a fallback if DPR-based BB is missing.
+
+    query.set_beam_filling_thresh(100.0) # this was the default parameter in our old plots
+    #query.set_below_bb() # above and below BB are defined as above and below 750m of mean brightband
+    #query.set_above_bb()
+    #query.set_convective()
+    #query.set_stratiform()
+
 
     #Here’s what I have in mind for this…specify the parameter ‘topheight_below_ruc_0’=[some_value]
     # and it queries the ruc_0_height column and topHeight column and returns the results
@@ -400,10 +467,10 @@ def main():
         print("number of VN volume matches: ", num_results)
 
     # print first and last matchup values
-    # for key,values in matchups.items():
-    #     print("key ", key, " value[0] ", values[0])
-    # for key,values in matchups.items():
-    #     print("key ", key, " value[-1] ", values[-1])
+    #for key,values in matchups.items():
+    #    print("key ", key, " value[0] ", values[0])
+    #for key,values in matchups.items():
+    #    print("key ", key, " value[-1] ", values[-1])
 
     # Example: create unique sort order field by combining filename, and volume parameters
     # create index sorted by vn_filename, raynum, scannum, elev
