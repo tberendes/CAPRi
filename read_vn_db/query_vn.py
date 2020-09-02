@@ -410,7 +410,7 @@ def main():
     # which queries the ruc_0_height and bottomHeight columns and returns results where bottomHeight-ruc_0_height > [some_value].
 
     # can use 'lt', 'lte', 'gt', 'gte', 'eq' for relation
-    query.add_difference_threshold_filter('topHeight', 'ruc_0_height', 'lt', 1)
+    #query.add_difference_threshold_filter('topHeight', 'ruc_0_height', 'lt', 1)
     #query.add_difference_threshold_filter('bottomHeight', 'ruc_0_height', 'gt', 1)
 
     #query.add_range_filter('ruc_0_height', 0.0, 2.0)
