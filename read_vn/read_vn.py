@@ -182,6 +182,7 @@ def process_file(filename, alt_bright_band):
             varDict_fpdim['BBheight'] =  (nc.variables['BBheight'][:] / 1000.0) - site_elev  # fpdim
             varDict_fpdim['BBstatus'] =  nc.variables['BBstatus'][:]  # fpdim
             varDict_fpdim['TypePrecip'] =  nc.variables['TypePrecip'][:]  # fpdim
+            varDict_fpdim['clutterStatus'] =  nc.variables['TypePrecip'][:]  # fpdim
 
             precip_rate_thresh = nc.variables['rain_min'][...]
             print("rain_min ", precip_rate_thresh)
@@ -370,7 +371,7 @@ def main():
     #             client.upload_file(local_path, bucket, s3_path)
 
     VN_DIR = '/media/sf_berendes/capri_test_data/VN/mrms_geomatch'
-    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet_3_31'
+    OUT_DIR = '/media/sf_berendes/capri_test_data/VN_parquet_8_31'
     META_DIR = '/media/sf_berendes/capri_test_data/meta'
     alt_bb_file = '/media/sf_berendes/capri_test_data/BB/GPM_rain_event_bb_km.txt'
     s3_bucket = 'capri-data'
@@ -402,13 +403,19 @@ def main():
                     parquet_key = 'parquet_8_31/'+file+'.parquet'
                     upload_s3(os.path.join(OUT_DIR,file+'.parquet',), s3_bucket, parquet_key,overwrite_flag)
 
-                    with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
-                        json.dump(outputJson, json_file)
-                    json_file.close()
+                    with gzip.open(os.path.join(OUT_DIR,file+'.json.gz'), 'wt', encoding="ascii") as zipfile:
+                        json.dump(outputJson, zipfile)
+                    zipfile.close()
 
-                    metadata = { "vn_filename":outputJson[0]["vn_filename"], "time": outputJson[0]["time"],
-                                 "site_rainy_count": outputJson[0]["site_rainy_count"], "site_fp_count": outputJson[0]["site_fp_count"],
-                                 "site_percent_rainy":outputJson[0]["site_percent_rainy"]}
+                    # with open(os.path.join(OUT_DIR,file+'.json'), 'w') as json_file:
+                    #     json.dump(outputJson, json_file)
+                    # json_file.close()
+
+                    metadata = { "site":outputJson[0]["GR_site"],"vn_filename":outputJson[0]["vn_filename"],
+                                 "time": outputJson[0]["time"],"site_rainy_count": outputJson[0]["site_rainy_count"],
+                                 "site_fp_count": outputJson[0]["site_fp_count"],
+                                 "site_percent_rainy":outputJson[0]["site_percent_rainy"],
+                                 "meanBB":outputJson[0]["meanBB"]}
                     os.makedirs(os.path.join(META_DIR), exist_ok=True)
                     with open(os.path.join(META_DIR,file+'.meta.json'), 'w') as json_file:
                         json.dump(metadata, json_file)
