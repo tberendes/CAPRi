@@ -362,6 +362,7 @@ def main():
     # initialize query parameters
     query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
     query.set_columns("time,latitude,longitude,GR_Z,Dm,gr_site,vn_filename,raynum,scannum,elev,typePrecip,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
+    #query.set_columns("bottomHeight,ruc_0_height,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
     # added new column for s2ku adjusted GR reflectivity
     # column:  'GR_Z_s2ku'
 
@@ -411,7 +412,7 @@ def main():
 
     # can use 'lt', 'lte', 'gt', 'gte', 'eq' for relation
     #query.add_difference_threshold_filter('topHeight', 'ruc_0_height', 'lt', 1)
-    #query.add_difference_threshold_filter('bottomHeight', 'ruc_0_height', 'gt', 1)
+    query.add_difference_threshold_filter('bottomHeight', 'ruc_0_height', 'lt', -1)
 
     #query.add_range_filter('ruc_0_height', 0.0, 2.0)
 
@@ -449,6 +450,9 @@ def main():
     if len(matchups)==0:
         print("Query found no matchups")
         exit(0)
+
+# exit early
+    #exit(0)
 
     # examples of manipulating and processing matchup results
 
