@@ -76,6 +76,18 @@ def post_http_data(request):
         sys.exit(1)
     return response
 
+def compute_mean_BB_DPRGMI(BBheight):
+    fpdim = len(BBheight)
+    mean = 0.0
+    count = 0
+    for fp in range(fpdim-1):
+        if BBheight[fp] > 0:
+            mean = mean + BBheight[fp]
+            count = count + 1
+    if count == 0:
+        return -9999.0
+    else:
+        return mean / count
 def compute_mean_BB(BBheight, BBquality, BBraintype):
     fpdim = len(BBheight)
     mean = 0.0
@@ -112,51 +124,51 @@ def compute_BB_prox(meanBB, top, botm):
        # IF countin GT 0 THEN bbProx[idxin] = 2
 
 def process_file(filename, alt_bright_band):
-    DPR_to_athena_variables= {
-        'GR_Z':'GR_Z',
-        'GR_Z_StdDev':'GR_Z_StdDev',
-        'GR_Z_Max':'GR_Z_Max',
-        'zFactorMeasured':'zFactorMeasured',
-        'zFactorCorrected':'zFactorCorrected',
-        'GR_RC_rainrate':'GR_RC_rainrate',
-        'GR_RC_rainrate_StdDev':'GR_RC_rainrate_StdDev',
-        'GR_RC_rainrate_Max':'GR_RC_rainrate_Max',
-        'GR_RR_rainrate':'GR_RR_rainrate',
-        'GR_RR_rainrate_StdDev':'GR_RR_rainrate_StdDev',
-        'GR_RR_rainrate_Max':'GR_RR_rainrate_Max',
-        'PrecipRate':'PrecipRate',
-        'GR_Dm':'GR_Dm',
-        'GR_Dm_StdDev':'GR_Dm_StdDev',
-        'GR_Dm_Max':'GR_Dm_Max',
-        'Dm':'Dm',
-        'GR_HID':'GR_HID',
-        'latitude':'latitude',
-        'longitude':'longitude',
-        'topHeight':'topHeight',
-        'bottomHeight':'bottomHeight',
-        'piaFinal':'piaFinal',
-        'PrecipRateSurface':'PrecipRateSurface',
-        'SurfPrecipTotRate':'SurfPrecipTotRate',
-        'heightStormTop':'heightStormTop',
-        'TypePrecip':'TypePrecip',
-        'scanNum':'scanNum',
-        'GR_Zdr':'GR_Zdr',
-        'GR_RHOhv':'GR_RHOhv',
-        'GR_Nw':'GR_Nw',
-        'GR_Nw_StdDev':'GR_Nw_StdDev',
-        'GR_Nw_Max':'GR_Nw_Max',
-        'Nw':'Nw',
-        'BBheight':'BBheight',
-        'clutterStatus':'clutterStatus',
-        'n_gr_z_rejected':'n_gr_z_rejected',
-        'n_gr_expected':'n_gr_expected',
-        'n_dpr_corr_z_rejected':'n_dpr_corr_z_rejected',
-        'n_dpr_expected':'n_dpr_expected',
-        'precipTotWaterCont':'',
-        'ruc_0_height':'ruc_0_height',
-        'GR_Z_s2Ku':'GR_Z_s2Ku',
-        'GR_blockage':'GR_blockage'
-    }
+    # DPR_to_athena_variables= {
+    #     'GR_Z':'GR_Z',
+    #     'GR_Z_StdDev':'GR_Z_StdDev',
+    #     'GR_Z_Max':'GR_Z_Max',
+    #     'zFactorMeasured':'zFactorMeasured',
+    #     'zFactorCorrected':'zFactorCorrected',
+    #     'GR_RC_rainrate':'GR_RC_rainrate',
+    #     'GR_RC_rainrate_StdDev':'GR_RC_rainrate_StdDev',
+    #     'GR_RC_rainrate_Max':'GR_RC_rainrate_Max',
+    #     'GR_RR_rainrate':'GR_RR_rainrate',
+    #     'GR_RR_rainrate_StdDev':'GR_RR_rainrate_StdDev',
+    #     'GR_RR_rainrate_Max':'GR_RR_rainrate_Max',
+    #     'PrecipRate':'PrecipRate',
+    #     'GR_Dm':'GR_Dm',
+    #     'GR_Dm_StdDev':'GR_Dm_StdDev',
+    #     'GR_Dm_Max':'GR_Dm_Max',
+    #     'Dm':'Dm',
+    #     'GR_HID':'GR_HID',
+    #     'latitude':'latitude',
+    #     'longitude':'longitude',
+    #     'topHeight':'topHeight',
+    #     'bottomHeight':'bottomHeight',
+    #     'piaFinal':'piaFinal',
+    #     'PrecipRateSurface':'PrecipRateSurface',
+    #     'SurfPrecipTotRate':'SurfPrecipTotRate',
+    #     'heightStormTop':'heightStormTop',
+    #     'TypePrecip':'TypePrecip',
+    #     'scanNum':'scanNum',
+    #     'GR_Zdr':'GR_Zdr',
+    #     'GR_RHOhv':'GR_RHOhv',
+    #     'GR_Nw':'GR_Nw',
+    #     'GR_Nw_StdDev':'GR_Nw_StdDev',
+    #     'GR_Nw_Max':'GR_Nw_Max',
+    #     'Nw':'Nw',
+    #     'BBheight':'BBheight',
+    #     'clutterStatus':'clutterStatus',
+    #     'n_gr_z_rejected':'n_gr_z_rejected',
+    #     'n_gr_expected':'n_gr_expected',
+    #     'n_dpr_corr_z_rejected':'n_dpr_corr_z_rejected',
+    #     'n_dpr_expected':'n_dpr_expected',
+    #     'precipTotWaterCont':'',
+    #     'ruc_0_height':'ruc_0_height',
+    #     'GR_Z_s2Ku':'GR_Z_s2Ku',
+    #     'GR_blockage':'GR_blockage'
+    # }
 
     outputJson = []
     with gzip.open(filename) as gz:
@@ -180,7 +192,18 @@ def process_file(filename, alt_bright_band):
                 if data_is_dprgmi:
                     varDict_elev_fpdim['ZFactorMeasured'] = np.empty_like(varDict_elev_fpdim['GR_Z'])
                     varDict_elev_fpdim['ZFactorMeasured'][:] = -9999.0
-                    varDict_elev_fpdim['ZFactorCorrected'] =  nc.variables['correctedReflectFactor'+add][:,:,0] # elevAngle 	fpdim
+                    #varDict_elev_fpdim['ZFactorCorrected'] = float(ma.getdata(nc.variables['GR_blockage' + add][elev])[fp])
+                    shape = nc.variables['correctedReflectFactor'+add].shape
+                    eld = shape[0]
+                    fpd = shape[1]
+                    if len(shape) == 2:
+                        varDict_elev_fpdim['ZFactorCorrected'] = nc.variables['correctedReflectFactor'+add][:]  # elevAngle 	fpdim
+                    else:  # MS swath has extra dimension, use only 1st dimension (ku) value
+                        nkukad = nc.variables['correctedReflectFactor'+add].shape[2]
+                        varDict_elev_fpdim['ZFactorCorrected'] = np.empty_like(varDict_elev_fpdim['GR_Z']) # elevAngle 	fpdim
+                        for el in range(eld):
+                            for fp in range(fpd):
+                                varDict_elev_fpdim['ZFactorCorrected'][el][fp] =  float(ma.getdata(nc.variables['correctedReflectFactor'+add][el])[fp][0])
                 else:
                     varDict_elev_fpdim['ZFactorMeasured'] = nc.variables['ZFactorMeasured'][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['ZFactorCorrected'] =  nc.variables['ZFactorCorrected'][:] # elevAngle 	fpdim
@@ -192,14 +215,14 @@ def process_file(filename, alt_bright_band):
                 varDict_elev_fpdim['GR_RR_rainrate_Max'] = nc.variables['GR_RR_rainrate_Max'+add][:]   # elevAngle 	fpdim
 
                 if data_is_dprgmi:
-                    varDict_elev_fpdim['PrecipRate'] = nc.variables['PrecipTotRate' + add][:]  # elevAngle 	fpdim
+                    varDict_elev_fpdim['PrecipRate'] = nc.variables['precipTotRate' + add][:]  # elevAngle 	fpdim
                 else:
                     varDict_elev_fpdim['PrecipRate'] = nc.variables['PrecipRate'][:]   # elevAngle 	fpdim
                 varDict_elev_fpdim['GR_Dm'] = nc.variables['GR_Dm'+add][:]   # elevAngle 	fpdim
                 varDict_elev_fpdim['GR_Dm_StdDev'] =  nc.variables['GR_Dm_StdDev'+add][:]  # elevAngle 	fpdim
                 varDict_elev_fpdim['GR_Dm_Max'] = nc.variables['GR_Dm_Max'+add][:]   # elevAngle 	fpdim
                 if data_is_dprgmi:
-                    varDict_elev_fpdim['Dm'] = nc.variables['precipTotPSDParamHigh'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['Dm'] = nc.variables['precipTotPSDparamHigh'+add][:]   # elevAngle 	fpdim
                 else:
                     varDict_elev_fpdim['Dm'] = nc.variables['Dm'][:]  # elevAngle 	fpdim
 
@@ -209,12 +232,29 @@ def process_file(filename, alt_bright_band):
                 varDict_elev_fpdim['GR_Nw_StdDev'] = nc.variables['GR_Nw_StdDev'+add][:]   # elevAngle 	fpdim
                 varDict_elev_fpdim['GR_Nw_Max'] = nc.variables['GR_Nw_Max'+add][:]   # elevAngle 	fpdim
                 if data_is_dprgmi:
-                    varDict_elev_fpdim['Nw'] = nc.variables['precipTotPSDParamLow' + add][:,:,0]  # elevAngle 	fpdim
+                    #varDict_elev_fpdim['Nw'] = nc.variables['precipTotPSDparamLow' + add][:,:,0:0]  # elevAngle 	fpdim
+                    eld = nc.variables['precipTotPSDparamLow' + add].shape[0]
+                    fpd = nc.variables['precipTotPSDparamLow' + add].shape[1]
+                    nPSDlo = nc.variables['precipTotPSDparamLow' + add].shape[2]
+                    varDict_elev_fpdim['Nw'] = np.empty_like(varDict_elev_fpdim['GR_Nw']) # elevAngle 	fpdim
+
+                    clut_shape = nc.variables['clutterStatus' + add].shape
+                    # handle kuka dimension for MS swath
+                    if len(clut_shape)== 3:
+                        varDict_elev_fpdim['clutterStatus'] = np.empty_like(varDict_elev_fpdim['GR_Nw'])
+                    else:
+                        varDict_elev_fpdim['clutterStatus'] = nc.variables['clutterStatus' + add][:]
+                    for el in range(eld):
+                        for fp in range(fpd):
+                            varDict_elev_fpdim['Nw'][el][fp] =  float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
+                            if len(clut_shape)== 3: # handle kuka dimension for MS swath (use ku)
+                                varDict_elev_fpdim['clutterStatus'][el][fp] =  int(ma.getdata(nc.variables['clutterStatus' + add][el])[fp][0])
                 else:
                     varDict_elev_fpdim['Nw'] =  nc.variables['Nw'+add][:]  # elevAngle 	fpdim
+                    varDict_elev_fpdim['clutterStatus'] = nc.variables['clutterStatus' + add][:]  # fpdim
                 varDict_elev_fpdim['latitude'] = nc.variables['latitude'+add][:]   # elevAngle 	fpdim
                 varDict_elev_fpdim['longitude'] = nc.variables['longitude'+add][:]   # elevAngle 	fpdim
-                varDict_elev_fpdim['clutterStatus'] = nc.variables['clutterStatus' + add][:]  # fpdim
+                #varDict_elev_fpdim['clutterStatus'] = nc.variables['clutterStatus' + add][:]  # fpdim
 
                 # # expected/rejected, beam filling param for GR and DPR
     #             varDict_elev_fpdim['n_gr_z_rejected'] = nc.variables['n_gr_z_rejected'][:]   # elevAngle 	fpdim
@@ -235,18 +275,33 @@ def process_file(filename, alt_bright_band):
                 varDict_elev_fpdim['topHeight'] = nc.variables['topHeight'+add][:] # elevAngle 	fpdim
                 varDict_elev_fpdim['bottomHeight'] = nc.variables['bottomHeight'+add][:] # elevAngle 	fpdim
 
+                if data_is_dprgmi:
+                    varDict_elev_fpdim['precipTotWaterCont'] =  nc.variables['precipTotWaterCont'+add][:]  # fpdim
+                else:
+                    varDict_elev_fpdim['precipTotWaterCont'] =  np.empty_like(varDict_elev_fpdim['topHeight'])
+                    varDict_elev_fpdim['precipTotWaterCont'][:] =  -9999.0
+
                 # Ground radar hydrometeor id histograms
                 hid = nc.variables['GR_HID'+add][:]   # elevAngle 	fpdim 	hidim
 
                 # variables indexed by fpdim (i.e. surface level or GPM footprint regardless of height
                 varDict_fpdim={}
                 if data_is_dprgmi:
-                    varDict_fpdim['piaFinal'] = nc.variables['pia'+add][:]   # fpdim
+                    shape = nc.variables['pia' + add].shape
+                    fpd = shape[0]
+                    if len(shape) == 1:
+                        varDict_fpdim['piaFinal'] = nc.variables['pia'+add][:]   # fpdim
+                    else:
+                        nkukad = shape[1]
+                        varDict_fpdim['piaFinal'] = np.empty_like(nc.variables['scanNum'+add]) # elevAngle 	fpdim
+                        for fp in range(fpd):
+                            varDict_fpdim['piaFinal'][fp] =  float(ma.getdata(nc.variables['pia'+add])[fp][0])
+
                     #varDict_elev_fpdim['ZFactorMeasured'] = np.empty_like(varDict_elev_fpdim['GR_Z'])
                     #varDict_elev_fpdim['ZFactorMeasured'][:] = -9999.0
                     varDict_fpdim['PrecipRateSurface'] =  np.empty_like(varDict_fpdim['piaFinal'])
                     varDict_fpdim['PrecipRateSurface'][:] = -9999.0
-                    varDict_fpdim['SurfPrecipTotRate'] =  nc.variables['SurfPrecipTotRate'+add][:]  # fpdim
+                    varDict_fpdim['SurfPrecipTotRate'] =  nc.variables['surfPrecipTotRate'+add][:]  # fpdim
                     varDict_fpdim['heightStormTop'] = np.empty_like(varDict_fpdim['piaFinal'])
                     varDict_fpdim['heightStormTop'][:] = -9999.0
                 else:
@@ -266,43 +321,46 @@ def process_file(filename, alt_bright_band):
                 print("orbit number: ", orbit_number)
 
                 GPM_SENSOR=''
-                DPR_2ADPR_file = getattr(nc, 'DPR_2ADPR_file')
-                DPR_2AKU_file = getattr(nc, 'DPR_2AKU_file')
-                DPR_2AKA_file = getattr(nc, 'DPR_2AKA_file')
-                DPR_2BCMB_file = getattr(nc, 'DPR_2BCMB_file')
-                if not DPR_2ADPR_file.startswith('no_'):
-                    GPM_SENSOR = 'DPR'
-                elif not DPR_2AKU_file.startswith('no_'):
-                    GPM_SENSOR = 'Ku'
-                elif not DPR_2AKA_file.startswith('no_'):
-                    GPM_SENSOR = 'Ka'
-                elif not DPR_2BCMB_file.startswith('no_'):
+                if data_is_dprgmi:
                     GPM_SENSOR = 'DPRGMI'
                 else:
-                    GPM_SENSOR = 'Unknown'
+                    DPR_2ADPR_file = getattr(nc, 'DPR_2ADPR_file')
+                    DPR_2AKU_file = getattr(nc, 'DPR_2AKU_file')
+                    DPR_2AKA_file = getattr(nc, 'DPR_2AKA_file')
+                    # DPR_2BCMB_file = getattr(nc, 'DPR_2BCMB_file')
+                    if not DPR_2ADPR_file.startswith('no_'):
+                        GPM_SENSOR = 'DPR'
+                    elif not DPR_2AKU_file.startswith('no_'):
+                        GPM_SENSOR = 'Ku'
+                    elif not DPR_2AKA_file.startswith('no_'):
+                        GPM_SENSOR = 'Ka'
+                    # elif not DPR_2BCMB_file.startswith('no_'):
+                    #     GPM_SENSOR = 'DPRGMI'
+                    else:
+                        GPM_SENSOR = 'Unknown'
                 GR_site = getattr(nc, 'GR_file').split('_')[0]
 
                 if data_is_dprgmi:
                     zero_altitude = nc.variables['zeroDegAltitude'+add][:] / 1000.0
+
+                if GR_site in alt_bright_band.keys() and orbit_number in alt_bright_band[GR_site].keys():
+                    alt_BB_height = alt_bright_band[GR_site][orbit_number]
                 else:
-                    if GR_site in alt_bright_band.keys() and orbit_number in alt_bright_band[GR_site].keys():
-                        alt_BB_height = alt_bright_band[GR_site][orbit_number]
-                    else:
-                        alt_BB_height = -9999.0
+                    alt_BB_height = -9999.0
 
                 if data_is_dprgmi:
                     varDict_fpdim['BBheight'] =  np.empty_like(varDict_fpdim['scanNum'])
                     varDict_fpdim['BBheight'][:] = -9999.0
-                    varDict_fpdim['BBstatus'][:] =  np.empty_like(varDict_fpdim['scanNum'])
+                    varDict_fpdim['BBstatus'] =  np.empty_like(varDict_fpdim['scanNum'])
                     varDict_fpdim['BBstatus'][:] =  -9999.0
                     varDict_fpdim['TypePrecip'] =  nc.variables['precipitationType'+add][:]  # fpdim
-                    varDict_fpdim['precipTotWaterCont'][:] =  nc.variables['precipTotWaterCont'+add][:]  # fpdim
+                    # varDict_fpdim['precipTotWaterCont'] =  nc.variables['precipTotWaterCont'+add][:]  # fpdim
                 else:
                     varDict_fpdim['BBheight'] =  (nc.variables['BBheight'][:] / 1000.0) - site_elev  # fpdim
                     varDict_fpdim['BBstatus'] =  nc.variables['BBstatus'][:]  # fpdim
                     varDict_fpdim['TypePrecip'] =  nc.variables['TypePrecip'][:]  # fpdim
-                    varDict_fpdim['precipTotWaterCont'][:] =  np.empty_like(varDict_fpdim['scanNum'])
-                    varDict_fpdim['precipTotWaterCont'][:] =  -9999.0
+                    # varDict_fpdim['precipTotWaterCont'] =  np.empty_like(varDict_fpdim['scanNum'])
+                    # varDict_fpdim['precipTotWaterCont'][:] =  -9999.0
 
                 precip_rate_thresh = nc.variables['rain_min'][...]
                 print("rain_min ", precip_rate_thresh)
@@ -343,7 +401,10 @@ def process_file(filename, alt_bright_band):
                 print ("percent rainy ", percent_rainy)
 
                 # compute mean BB
-                meanBB = compute_mean_BB(varDict_fpdim['BBheight'], varDict_fpdim['BBstatus'],varDict_fpdim['TypePrecip'])
+                if data_is_dprgmi:
+                    meanBB = compute_mean_BB_DPRGMI(zero_altitude)
+                else:
+                    meanBB = compute_mean_BB(varDict_fpdim['BBheight'], varDict_fpdim['BBstatus'],varDict_fpdim['TypePrecip'])
                 if meanBB < 0.0:
                     if alt_BB_height > 0.0:
                         meanBB = alt_BB_height
@@ -372,8 +433,10 @@ def process_file(filename, alt_bright_band):
                             fp_entry["ruc_0_height"] = alt_BB_height
 
                         for fp_key in varDict_fpdim:
+                            #print("fp_key ",fp_key)
                             fp_entry[fp_key]=float(ma.getdata(varDict_fpdim[fp_key])[fp])
                         for fp_elev_key in varDict_elev_fpdim:
+                            #print("fp_elev_key ",fp_elev_key)
                             fp_entry[fp_elev_key] = float(ma.getdata(varDict_elev_fpdim[fp_elev_key][elev])[fp])
                         for id in range(hidim-1):
                             fp_entry["hid_"+str(id+1)] = int(ma.getdata(hid[elev][fp])[id])
@@ -403,9 +466,16 @@ def process_file(filename, alt_bright_band):
                         # expected/rejected, beam filling param for GR and DPR
                         gr_exp = float(ma.getdata(nc.variables['n_gr_expected'+add][elev])[fp])
                         gr_rej = float(ma.getdata(nc.variables['n_gr_z_rejected'+add][elev])[fp])
-                        dpr_exp = float(ma.getdata(nc.variables['n_dpr_expected'+add][elev])[fp])
+                        if len(ma.getdata(nc.variables['n_dpr_expected'+add].shape)) == 3:
+                            dpr_exp = float((ma.getdata(nc.variables['n_dpr_expected' + add][elev])[fp])[0])
+                        else:
+                            dpr_exp = float(ma.getdata(nc.variables['n_dpr_expected'+add][elev])[fp])
                         if data_is_dprgmi:
-                            dpr_rej = float(ma.getdata(nc.variables['n_correctedRefectFactor_rejected'+add][elev])[fp])
+                            if len(ma.getdata(nc.variables['n_dpr_expected' + add].shape)) == 3:
+                                dpr_rej = float(
+                                    (ma.getdata(nc.variables['n_correctedReflectFactor_rejected' + add][elev])[fp])[0])
+                            else:
+                                dpr_rej = float(ma.getdata(nc.variables['n_correctedReflectFactor_rejected'+add][elev])[fp])
                         else:
                             dpr_rej = float(ma.getdata(nc.variables['n_dpr_corr_z_rejected'][elev])[fp])
 
@@ -473,26 +543,26 @@ def main():
 
 #    VN_DIR = '/media/sf_berendes/capri_test_data/VN/mrms_geomatch'
 
-#    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2BDPRGMI/V06A/1_3'
+    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2BDPRGMI/V06A/1_3'
 #    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2AKu/NS/V06A/1_21'
 #    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2ADPR/MS/V06A/1_21'
 #    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2ADPR/HS/V06A/1_21'
-    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2ADPR/NS/V06A/1_21'
+#    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2ADPR/NS/V06A/1_21'
 #    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2ADPR/MS/V06A/1_21'
 #    VN_DIR = '/data/capri_test_data/VN/wget/GPM/2ADPR/HS/V06A/1_21'
 
-    OUT_DIR = '/data/capri_test_data/VN_parquet'
-    META_DIR = '/data/capri_test_data/meta'
+    OUT_DIR = '/data/capri_test_data/VN_parquet_dprgmi'
+    META_DIR = '/data/capri_test_data/meta_dprgmi'
     alt_bb_file = '/data/capri_test_data/BB/GPM_rain_event_bb_km.txt'
     s3_bucket = 'capri-data'
-    s3_dir = 'parquet_all'
-    meta_dir = 'metadata_all'
+    s3_dir = 'parquet_dprgmi'
+    meta_dir = 'metadata_dprgmi'
     site_pattern = 'K'
     upload_bin = False
     upload_img = False
     process_parquet_meta = True
-    upload_parquet = True
-    upload_meta = True
+    upload_parquet = False
+    upload_meta = False
     overwrite_upload_flag = True
     save_json = True
     reprocess_flag = False # don't reprocess if output parquet already exists
