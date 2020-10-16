@@ -16,5 +16,5 @@
 "upload_meta":true,
 "overwrite_upload_flag":true,
 "save_json":true,
-"reprocess_flag":false
+"reprocess_flag":true
 }

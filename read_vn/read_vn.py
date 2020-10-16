@@ -247,7 +247,11 @@ def process_file(filename, alt_bright_band):
                             varDict_elev_fpdim['clutterStatus'] = nc.variables['clutterStatus' + add][:]
                         for el in range(eld):
                             for fp in range(fpd):
-                                varDict_elev_fpdim['Nw'][el][fp] =  float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
+                                #varDict_elev_fpdim['Nw'][el][fp] =  float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
+                                val = float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
+                                # scales log10(Nw) values from 1/m^4 to 1/m^3
+                                if val > 0:
+                                    varDict_elev_fpdim['Nw'][el][fp] = val - 3.0
                                 if len(clut_shape)== 3: # handle kuka dimension for MS swath (use ku)
                                     varDict_elev_fpdim['clutterStatus'][el][fp] =  int(ma.getdata(nc.variables['clutterStatus' + add][el])[fp][0])
                     else:
