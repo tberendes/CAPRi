@@ -31,9 +31,6 @@ from netCDF4 import chartostring
 import numpy as np
 from numpy import ma
 
-ingest_url = 'https://6inm6whnni.execute-api.us-east-1.amazonaws.com/default/ingest_vn_data'
-api_key = 'LakZ1uMrR465m1GQKoQhQ7Ig3bwr7wyPavUZ9mEc'
-
 import json
 
 #s3 = boto3.resource(
@@ -44,37 +41,12 @@ session = boto3.Session(profile_name='CAPRI')
 # from the [CAPRI] section of ~/.aws/credentials.
 client = session.client('s3')
 
-http = urllib3.PoolManager(cert_reqs='CERT_REQUIRED', ca_certs=certifi.where())
-
 def zip_string(str_data: str) -> bytes:
     btsio = BytesIO()
     g = gzip.GzipFile(fileobj=btsio, mode='w')
     g.write(bytes(str_data, 'utf8'))
     g.close()
     return btsio.getvalue()
-
-
-def post_http_data(request):
-
-    request_id = ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(10))
-    hdrs = {'Content-Type': 'application/json; charset=UTF-8',
-            'Accept': 'application/json',
-            'Content-Encoding': 'gzip',
-            'x-api-key': api_key}
-    data = json.dumps(request)
-    zipped_data = zip_string(data)
-    #r = http.request('POST', ingest_url, body=data, headers=hdrs)
-    r = http.request('POST', ingest_url, body=zipped_data, headers=hdrs)
-
-    #print('r.data ',r.data)
-    response = json.loads(r.data)
-#    print('request ', request)
-    #print('response ', response)
-    # Check for errors
-    if 'status' not in response.keys() or response['status'] != 'upload successful':
-        print('AWS Error: upload failed')
-        sys.exit(1)
-    return response
 
 def compute_mean_BB_DPRGMI(BBheight):
     fpdim = len(BBheight)
@@ -378,9 +350,9 @@ def process_file(filename, alt_bright_band):
 
                     # time of GPM closest approach to radar site, handled differently
                     closestTime = str(chartostring(nc.variables['atimeNearestApproach'][:], encoding='utf-8'))
-                    year = closestTime.split('-')[0]
-                    month = closestTime.split('-')[1]
-                    day = closestTime.split('-')[2].split(' ')[0]
+                    year = int(closestTime.split('-')[0])
+                    month = int(closestTime.split('-')[1])
+                    day = int(closestTime.split('-')[2].split(' ')[0])
                     # extract out only time field
                     closestTime = closestTime.split(' ')[1]
 
@@ -445,7 +417,7 @@ def process_file(filename, alt_bright_band):
                             fp_entry={"time": closestTime, "elev":float(elevationAngle[elev]),
                                       "vn_filename":VN_filename, "site_percent_rainy":percent_rainy,
                                       "site_rainy_count":site_rainy_count, "site_fp_count":fpdim,
-                                      "site_elev":site_elev, "meanBB":meanBB}
+                                      "site_elev":site_elev, "meanBB":meanBB, "fp":fp}
                             if data_is_dprgmi:
                                 fp_entry["ruc_0_height"] = float(ma.getdata(zero_altitude)[fp])
                             else:
@@ -726,57 +698,30 @@ def main():
                         upload_s3(os.path.join(root,file+'.gpm.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.gpm.bin',config['overwrite_upload_flag'])
                     if os.path.isfile(os.path.join(root, file + '.mrms.bin')):
                         upload_s3(os.path.join(root,file+'.mrms.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.mrms.bin',config['overwrite_upload_flag'])
+                    if os.path.isfile(os.path.join(root, file + '.fp.bin')):
+                        upload_s3(os.path.join(root,file+'.fp.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.fp.bin',config['overwrite_upload_flag'])
 
                 if config['upload_img']:
                     # check for GPM and MRMS DL images and kml files
-                    # if os.path.isfile(os.path.join(root, file + '.gpm.bw.png')):
-                    #     upload_s3(os.path.join(root,file+'.gpm.bw.png'), s3_bucket, config['s3_img_dir']+'/'+file+'.gpm.bw.png',overwrite_upload_flag)
-                    # if os.path.isfile(os.path.join(root, file + '.gpm.bw.kml')):
-                    #     upload_s3(os.path.join(root,file+'.gpm.bw.kml'), s3_bucket, config['s3_img_dir']+'/'+file+'.gpm.bw.kml',overwrite_upload_flag)
+                    if os.path.isfile(os.path.join(root, file + '.gpm.bw.png')):
+                        upload_s3(os.path.join(root,file+'.gpm.bw.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.bw.png',config['overwrite_upload_flag'])
+                    if os.path.isfile(os.path.join(root, file + '.gpm.bw.kml')):
+                        upload_s3(os.path.join(root,file+'.gpm.bw.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.bw.kml',config['overwrite_upload_flag'])
                     if os.path.isfile(os.path.join(root, file + '.gpm.col.png')):
                         upload_s3(os.path.join(root,file+'.gpm.col.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.col.png',config['overwrite_upload_flag'])
                     if os.path.isfile(os.path.join(root, file + '.gpm.col.kml')):
                         upload_s3(os.path.join(root,file+'.gpm.col.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.col.kml',config['overwrite_upload_flag'])
 
-                    # if os.path.isfile(os.path.join(root, file + '.mrms.bw.png')):
-                    #     upload_s3(os.path.join(root,file+'.mrms.bw.png'), s3_bucket, config['s3_img_dir']+'/'+file+'.mrms.bw.png',overwrite_upload_flag)
-                    # if os.path.isfile(os.path.join(root, file + '.mrms.bw.kml')):
-                    #     upload_s3(os.path.join(root,file+'.mrms.bw.kml'), s3_bucket, config['s3_img_dir']+'/'+file+'.mrms.bw.kml',overwrite_upload_flag)
+                    if os.path.isfile(os.path.join(root, file + '.mrms.bw.png')):
+                        upload_s3(os.path.join(root,file+'.mrms.bw.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.bw.png',config['overwrite_upload_flag'])
+                    if os.path.isfile(os.path.join(root, file + '.mrms.bw.kml')):
+                        upload_s3(os.path.join(root,file+'.mrms.bw.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.bw.kml',config['overwrite_upload_flag'])
                     if os.path.isfile(os.path.join(root, file + '.mrms.col.png')):
                         upload_s3(os.path.join(root,file+'.mrms.col.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.col.png',config['overwrite_upload_flag'])
                     if os.path.isfile(os.path.join(root, file + '.mrms.col.kml')):
                         upload_s3(os.path.join(root,file+'.mrms.col.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.col.kml',config['overwrite_upload_flag'])
 
                 #sys.exit()
-
-
-    #outputJson = process_file("/data/capri_test_data/VN/2019/GRtoDPR.KEOX.190807.30913.V06A.DPR.NS.1_21.nc.gz")
-
-#    tempfp = tempfile.NamedTemporaryFile(mode = 'w', delete = False)
-#    with open("/home/dhis/test_vn.json", 'w') as result_file:
-#        json.dump(outputJson, tempfp)
-
-    # try:
-    #     tempname = tempfile.NamedTemporaryFile(delete=False).name+".json.gz"
-    #     gz = gzip.GzipFile(filename=tempname, mode='wb', compresslevel=9)
-    #     data = json.dumps(outputJson)
-    #     gz.write(bytes(data, 'utf-8'))
-    # except (IOError, os.error) as why:
-    #     print
-    #     'Failed to write the file', tempname, '\n Exception:', why
-    # finally:
-    #     if gz is not None:
-    #         gz.close()
-    # print("read_vn gzipped json output file: " + tempname)
-
-#    print ("starting upload...")
-
-#    test_json = '{"name": "test", "min_lon": -13.6, "max_lon": -10.1, "min_lat": 6.8, "max_lat": 10.1, "variable": "HQprecipitation", "start_date": "2015-08-01T00:00:00.000Z", "end_date": "2015-08-01T23:59:59.999Z"}'
-#    response = post_http_data(json.loads(test_json))
-
-#    response = post_http_data(outputJson)
-#    print("post response: " + json.dumps(response))
-
 
 if __name__ == '__main__':
    main()
