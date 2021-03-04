@@ -7,11 +7,7 @@ import boto3 as boto3
 
 data_bucket = "capri-data"
 
-s3 = boto3.resource(
-    's3')
-
-#API key: LakZ1uMrR465m1GQKoQhQ7Ig3bwr7wyPavUZ9mEc
-#https://6inm6whnni.execute-api.us-east-1.amazonaws.com/default/ingest_vn_data
+s3 = boto3.resource('s3')
 
 def lambda_handler(event, context):
 

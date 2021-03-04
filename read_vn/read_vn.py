@@ -48,13 +48,13 @@ def zip_string(str_data: str) -> bytes:
     g.close()
     return btsio.getvalue()
 
-def compute_mean_BB_DPRGMI(BBheight):
-    fpdim = len(BBheight)
+def compute_mean_height(height):
+    fpdim = len(height)
     mean = 0.0
     count = 0
     for fp in range(fpdim):
-        if BBheight[fp] > 0:
-            mean = mean + BBheight[fp]
+        if height[fp] > 0:
+            mean = mean + height[fp]
             count = count + 1
     if count == 0:
         return -9999.0
@@ -318,7 +318,13 @@ def process_file(filename, alt_bright_band):
                     GR_site = getattr(nc, 'GR_file').split('_')[0]
 
                     if data_is_dprgmi:
-                        zero_altitude = nc.variables['zeroDegAltitude'+add][:] / 1000.0
+                        zero_altitude = (nc.variables['zeroDegAltitude'+add][:] / 1000.0) - site_elev
+                    else: # added zero_altitude for DPR, Ku, Ka
+                        if 'heightZeroDeg' in nc.variables.keys():
+                            zero_altitude = (nc.variables['heightZeroDeg'][:] / 1000.0) - site_elev
+                        else:
+                            zero_altitude = np.empty_like(varDict_fpdim['piaFinal'])
+                            zero_altitude[:] = -9999.0
 
                     if GR_site in alt_bright_band.keys() and orbit_number in alt_bright_band[GR_site].keys():
                         alt_BB_height = alt_bright_band[GR_site][orbit_number]
@@ -385,18 +391,22 @@ def process_file(filename, alt_bright_band):
                     percent_rainy = 100.0 * float(site_rainy_count)/float(fpdim)
                     #print ("percent rainy ", percent_rainy)
 
+                    mean_zeroDeg = compute_mean_height(zero_altitude)
                     # compute mean BB
                     if data_is_dprgmi:
-                        meanBB = compute_mean_BB_DPRGMI(zero_altitude)
+                        meanBB = mean_zeroDeg
                     else:
                         meanBB = compute_mean_BB(varDict_fpdim['BBheight'], varDict_fpdim['BBstatus'],nc.variables['TypePrecip'])
                     if meanBB < 0.0:
-                        if alt_BB_height > 0.0:
-                            meanBB = alt_BB_height
-                            print("missing Bright band, using Ruc_0 height ", meanBB)
+                        if mean_zeroDeg > 0.0:
+                            meanBB = mean_zeroDeg
                         else:
-                            meanBB = -9999.0
-                            print("missing Bright band and Ruc_0 height...")
+                            if alt_BB_height > 0.0:
+                                meanBB = alt_BB_height
+                                print("missing Bright band, using Ruc_0 height ", meanBB)
+                            else:
+                                meanBB = -9999.0
+                                print("missing Bright band and Ruc_0 height...")
                     # else:
                     #     print("Mean Bright band ", meanBB)
 
@@ -418,10 +428,14 @@ def process_file(filename, alt_bright_band):
                                       "vn_filename":VN_filename, "site_percent_rainy":percent_rainy,
                                       "site_rainy_count":site_rainy_count, "site_fp_count":fpdim,
                                       "site_elev":site_elev, "meanBB":meanBB, "fp":fp}
-                            if data_is_dprgmi:
-                                fp_entry["ruc_0_height"] = float(ma.getdata(zero_altitude)[fp])
+                            #if data_is_dprgmi:
+                            #    fp_entry["ruc_0_height"] = float(ma.getdata(zero_altitude)[fp])
+                            #else:
+                            #    fp_entry["ruc_0_height"] = alt_BB_height
+                            if mean_zeroDeg > 0.0: # we have a mean value so there are some valid individual values
+                                fp_entry["zero_deg_height"] = float(ma.getdata(zero_altitude)[fp])
                             else:
-                                fp_entry["ruc_0_height"] = alt_BB_height
+                                fp_entry["zero_deg_height"] = alt_BB_height
 
                             for fp_key in varDict_fpdim:
                                 #print("fp_key ",fp_key)
