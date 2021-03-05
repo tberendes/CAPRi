@@ -46,25 +46,80 @@ result_page_size = 3000
 
 import json
 
-# Charles code
-def read_fp_data(path):
-    # header index definitions
-    header_size = 5  # number of header fields of the binary data files provided by Todd Berendes
-    width_ind = 0
-    height_ind = 1
-    south_ind = 2  # southern latitude of origin
-    west_ind = 3  # western longitude of origin
-    res_ind = 4  # resolution in decimal degrees
+class MRMSToGPM:
+    def __init__(self, mrms_filename):
+        self.MRMS=None
+        self.GPM=None
+        self.GPMFootprint=None
+        self.MRMSDeepLearning=None # placeholder for eventual loading of deep learning results
+        self.load_data(mrms_filename)
 
-    with open(path, 'rb') as data_file:
-        header = struct.unpack('>{0}f'.format(header_size), data_file.read(4 * header_size))
-        size = int(header[width_ind] * header[height_ind])
-        shape = (int(header[height_ind]), int(header[width_ind]))
+    def __del__(self):
+        # Destructor:
+        pass
+    class binaryFile:
+        def __init__(self,filename):
+            self.data = None
+            self.width = None
+            self.height = None
+            self.llLat = None
+            self.llLon = None
+            self.llResolution = None
+            self.header_size = 5
+            # note: data is written in ascending lat, lon (i.e. lower left on map)
+            # if you want to access data in image style coordinate (i.e. upper left descending)
+            # you need to flip the line order of the numpy array by setting flip_flag = True
+            self.flip_flag = False
 
-        data = struct.unpack('>{0}f'.format(size), data_file.read(4 * size))
-        data = np.asarray(data).reshape(shape)
-        data = np.flip(data, 0)  # data is packed in ascending latitude
-        return data
+            self.load_data(filename)
+        # convert x and y coordinates to lat, lon
+        def get_lat(self,y):
+            if self.flip_flag:
+                lat = y * self.llResolution + self.llLat
+            else:
+                lat = (self.height - y - 1) * self.llResolution + self.llLat
+            return lat
+
+        def get_lon(self,x):
+            return x * self.llResolution + self.llLon
+
+        def get_lat_lon(self, x, y):
+
+            return (self.get_lat(y), self.get_lon(x))
+
+        def __del__(self):
+            # Destructor:
+            pass
+        # Charles code
+        def load_data(self,path):
+
+            with open(path, 'rb') as data_file:
+                # note: data is written in ascending lat, lon (i.e. lower left on map)
+                # if you want to access data in image style coordinate (i.e. upper left descending)
+                # you need to flip the line order of the numpy array
+                header = struct.unpack('>{0}f'.format(self.header_size), data_file.read(4 * self.header_size))
+                self.width = header[0]
+                self.height = header[1]
+                self.llLat = header[2]
+                self.llLon = header[3]
+                self.llResolution = header[4]
+                size = int(self.width * self.height)
+                shape = (int(self.height), int(self.width))
+
+                data = struct.unpack('>{0}f'.format(size), data_file.read(4 * size))
+                self.data = np.asarray(data).reshape(shape)
+                # flip line order if flip_flag is set to true
+                if self.flip_flag:
+                    self.data = np.flip(self.data, 0)  # data is packed in ascending latitude
+
+    def load_data(self, mrms_filename):
+        # construct footprint and GPM filenames from MRMS filename
+
+        self.MRMS = self.binaryFile(mrms_filename)
+        gpm_filename = mrms_filename.split('.mrms.bin')[0]+'.gpm.bin'
+        self.GPM = self.binaryFile(gpm_filename)
+        fp_filename = mrms_filename.split('.mrms.bin')[0]+'.fp.bin'
+        self.GPMFootprint = self.binaryFile(fp_filename)
 
 class VNQuery:
     def __init__(self):
@@ -393,17 +448,24 @@ class VNQuery:
 
 def main():
 
-    if len(sys.argv)>1:
-        fp_filename = sys.argv[1]
-    try:
-        with open(config_file) as f:
-            config = json.load(f)
-    except Exception as err:
-        print('Error opening file ', config_file, " - ", err)
-        sys.exit(-1)
+    # if len(sys.argv)>1:
+    #     mrms_filename = sys.argv[1]
+    # else:
+    #     print("usage: query_vn_by_fp mrms_filename.bin")
+    #     sys.exit(-1)
 
-    if len(sys.argv)>2:
-        config['VN_DIR'] = sys.argv[2]
+    #testing
+    mrms_filename = '/data/capri_test_data/VN/mrms_geomatch/2020/GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin'
+
+    # load mrms, gpm, and footprint .bin files int MRMSToGPM class
+    # assumes filename format used in the Java VN matchup program for MRMS data
+    MRMSMatch = MRMSToGPM(mrms_filename)
+
+    print('fp ', MRMSMatch.GPMFootprint.data[0][0], ' gpm ', MRMSMatch.GPM.data[0][0], ' mrms ', MRMSMatch.MRMS.data[0][0])
+    (lat,lon) = MRMSMatch.MRMS.get_lat_lon(0,0)
+    print('lat ', lat, ' lon ', lon)
+    # testing
+    sys.exit(0)
 
     ts = datetime.datetime.now().timestamp()
     print("start time: ", ts)
