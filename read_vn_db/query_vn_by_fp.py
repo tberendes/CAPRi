@@ -2,12 +2,16 @@
 #
 #  query_vn_by_fp.py
 #
-#  Description: this script queries data from the VN database on AWS using a footprint (fp) image generated
+#  Author:  Todd Berendes, UAH ITSC, March 2021
+#
+#  Description: this script queries data from the VN database on AWS corresponding to the
+#               footprint (fp) image generated
 #               by the MRMS matchup program and downloads a CSV
 #               result file, then parses out the values into a dictionary.  Optional saving of
 #               the CSV file is supported
 #
 #  Syntax: currently no input parameters
+#
 #
 #  To Do: modify to accept input parameters
 #
@@ -15,18 +19,13 @@
 
 # --Do all the necessary imports
 import csv
-import gzip
 import os
 import shutil
-import string
-import sys
 import time
-import urllib
 import datetime
 import tempfile
 import struct
 import numpy as np
-
 import json
 
 import requests
@@ -36,15 +35,13 @@ import requests
 # original version
 #url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/'
 #url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/result/'
+
 # new version with 'fp' and 'zero_deg_height'
 url_query = 'https://o381wx9rqh.execute-api.us-east-1.amazonaws.com/dev/'
 url_result = 'https://o381wx9rqh.execute-api.us-east-1.amazonaws.com/dev/result'
 
 max_retry_count = 30000
 retry_interval = 2
-result_page_size = 3000
-
-import json
 
 class MRMSToGPM:
     def __init__(self, mrms_filename):
@@ -98,8 +95,8 @@ class MRMSToGPM:
                 # if you want to access data in image style coordinate (i.e. upper left descending)
                 # you need to flip the line order of the numpy array
                 header = struct.unpack('>{0}f'.format(self.header_size), data_file.read(4 * self.header_size))
-                self.width = header[0]
-                self.height = header[1]
+                self.width = int(header[0])
+                self.height = int(header[1])
                 self.llLat = header[2]
                 self.llLon = header[3]
                 self.llResolution = header[4]
@@ -329,9 +326,12 @@ class VNQuery:
     # convenience functions for common filtering methods
     def set_columns(self, comma_list):
         self.params['columns'] = comma_list
+    # def set_time_range(self, start_time, end_time):
+    #     self.params['start_time'] = start_time
+    #     self.params['end_time'] = end_time
     def set_time_range(self, start_time, end_time):
-        self.params['start_time'] = start_time
-        self.params['end_time'] = end_time
+        self.params['min_datetime'] = start_time
+        self.params['max_datetime'] = end_time
     def set_lat_lon_box(self, start_lat, end_lat, start_lon, end_lon):
         self.params['start_lat'] = start_lat
         self.params['end_lat'] = end_lat
@@ -356,6 +356,8 @@ class VNQuery:
         self.params['scan_like'] = type
     def set_sensor(self,type):
         self.params['sensor_like'] = type
+    def set_vn_filename(self,type):
+        self.params['vn_filename_like'] = type
 
     # can also use % as a wildcard, i.e. site="K%" and list of sites i.e. site="KI%,KM%,KF%"
     def set_gr_site(self,site):
@@ -448,62 +450,66 @@ class VNQuery:
 
 def main():
 
+    # uncomment this to pass parameters
     # if len(sys.argv)>1:
     #     mrms_filename = sys.argv[1]
     # else:
-    #     print("usage: query_vn_by_fp mrms_filename.bin")
+    #     print("usage: query_vn_by_fp /path/to/mrms_filename.bin")
     #     sys.exit(-1)
 
     #testing
     mrms_filename = '/data/capri_test_data/VN/mrms_geomatch/2020/GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin'
 
-    # load mrms, gpm, and footprint .bin files int MRMSToGPM class
+    # load mrms, gpm, and footprint .bin files int MRMSToGPM class variable MRMSMatch
     # assumes filename format used in the Java VN matchup program for MRMS data
+    # and also assumes that the footprint and GPM images (.bin files) are in the same directory
     MRMSMatch = MRMSToGPM(mrms_filename)
 
     print('fp ', MRMSMatch.GPMFootprint.data[0][0], ' gpm ', MRMSMatch.GPM.data[0][0], ' mrms ', MRMSMatch.MRMS.data[0][0])
     (lat,lon) = MRMSMatch.MRMS.get_lat_lon(0,0)
     print('lat ', lat, ' lon ', lon)
-    # testing
-    sys.exit(0)
 
-    ts = datetime.datetime.now().timestamp()
-    print("start time: ", ts)
+    # use fields from the filename to query database to get only matching site data
+    #GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin
+    # Parse filename to set query parameters to retrieve VN data from Athena
+    parsed=mrms_filename.split('.')
+    site = parsed[1]
+    date_field = parsed[2]
+    year='20'+date_field[0:2]
+    month=date_field[2:4]
+    day=date_field[4:6]
+    # may want to add orbit number to database
+    orbit=parsed[3]
+    # for now do a "like" match on the begining of the filename up to the orbit number
+    gpm_version=parsed[4]
+    vn_fn = os.path.basename(mrms_filename).split('.'+gpm_version+'.')[0]+'.'
+    sensor=parsed[5]
+    scan=parsed[6]
+    vn_version=parsed[7].replace('_','.')
 
-#    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-21 00:00:00"}
+    # set up db query and fp based dictionary of results
+
+    #    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-21 00:00:00"}
     # initialize query class to start a new query
     query = VNQuery()
 
     # initialize query parameters
-#    query.set_time_range("2019-03-21 00:00:00", "2019-03-22 00:00:00")
-    query.set_columns("time,latitude,longitude,GR_Z,zFactorCorrected,gr_site,vn_filename,raynum,scannum,elev,typePrecip,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage,fp")
+    # set columns to retrieve from database
+    columns='fp,time,latitude,longitude,GR_Z,zFactorCorrected,GR_RC_rainrate,PrecipRate,typePrecip,BBheight,meanBB,BBprox,topHeight,bottomHeight'
+    query.set_columns(columns)
 
-    query.set_beam_filling_thresh(100.0) # this was the default parameter in our old plots
-    #query.set_below_bb() # above and below BB are defined as above and below 750m of mean brightband
-    #query.set_above_bb()
-    #query.set_convective()
-    #query.set_stratiform()
+    query.set_scan(scan)
+    query.set_sensor(sensor)
+    query.set_time_range(year+"-"+month+"-"+day+" 00:00:00", year+"-"+month+"-"+day+" 23:59:59")
+    query.set_vn_filename(vn_fn+"%") # use filaneme to restrict orbit since orbit isn't in DB yet
+    query.set_gpm_version(gpm_version)
+    query.set_vn_version(vn_version)
+    query.set_gr_site(site)
 
+    print(query.params)
 
-    #Here’s what I have in mind for this…specify the parameter ‘topheight_below_ruc_0’=[some_value]
-    # and it queries the zero_deg_height column and topHeight column and returns the results
-    # where topHeight-zero_deg_height < [some_value]. Similarly for the bottomHeight…’bottomheight_above_ruc_0’=[some_value]
-    # which queries the zero_deg_height and bottomHeight columns and returns results where bottomHeight-zero_deg_height > [some_value].
-
-    # can use 'lt', 'lte', 'gt', 'gte', 'eq' for relation
-    #query.add_difference_threshold_filter('topHeight', 'zero_deg_height', 'lt', 1)
-    #query.add_difference_threshold_filter('bottomHeight', 'zero_deg_height', 'lt', -1)
-
-    #query.add_range_filter('zero_deg_height', 0.0, 2.0)
-    query.set_scan("NS")
-    query.set_sensor("DPR")
-    # single day
-    query.add_parameter("year",2019)
-    query.add_parameter("month",3)
-    query.add_parameter("day",21)
-
-    query.set_gr_site('KEVX')
-
+    ts = datetime.datetime.now().timestamp()
+    print("start time: ", ts)
 
     # submit query to AWS
     res = query.submit_query()
@@ -515,6 +521,7 @@ def main():
     # if optional filename is ommitted, uses temporary file
     # which is automatically deleted on exit of program
     # check 'status' entry for 'success' or 'failed'
+    # this function loops until success or failure
     res = query.download_csv(filename="test_csv.csv")
     if res['status'] != 'success':
         print("Download failed: ", res['message'])
@@ -529,68 +536,55 @@ def main():
     if 'status' not in result or result['status'] == 'failed':
         print("Query failed")
         exit(-1)
-    if 'results' in result:
+    if 'results' in result: # successful query with results returned
         # extract matchups dictionary from result dictionary
         matchups = result['results']
     else:
         print("Query found no matchups")
         exit(0)
 
-    if len(matchups)==0:
+    if len(matchups)==0: # successful query with empty results
         print("Query found no matchups")
         exit(0)
 
-# exit early
-    #exit(0)
+    # construct a dictionary indexed by fp containing lists of dictionaries of columns
+    column_names=["latitude","longitude","topHeight","bottomHeight","GR_Z","zFactorCorrected","GR_RC_rainrate","PrecipRate","typePrecip"]
+    index=0
+    VN_data = {}
+    for fp in matchups['fp']:
+        # assume fp is in the returned matchups, add rest of the fields to the fp indexed dictionary
+        if fp not in VN_data.keys():
+            VN_data[fp] = [] # empty list
+        fp_dict= {}
+        for col in column_names:
+            fp_dict[col] = matchups[col][index]
+            pass
+        VN_data[fp].append(fp_dict)
+        index = index + 1
+    keyList = list(VN_data.keys())
 
-    # examples of manipulating and processing matchup results
+    # we now have an fp indexed list of VN volumes in VN_data
+    print("keys ",keyList)
+    print(VN_data[keyList[0]])
 
-    # get list of unique sites present in the results
-    gr_sites = {}
-    for site in matchups["gr_site"]:
-        gr_sites[site]="found"
+    # # Now we can loop through MRMSMatch class MRMS gridded GPMFootprint image
+    # to retrieve VN query information for each matching MRMS value
 
-    if len(gr_sites.keys()) > 0:
-        print("Radar sites present in query return:")
-        print(gr_sites.keys())
-
-    # print number of results in dictionary, pick a field and count entries
-    if 'latitude' in matchups:
-        num_results = len(matchups['latitude']) # pick a key value to get count of results
-        print("number of VN volume matches: ", num_results)
-
-    # print first and last matchup values
-    #for key,values in matchups.items():
-    #    print("key ", key, " value[0] ", values[0])
-    #for key,values in matchups.items():
-    #    print("key ", key, " value[-1] ", values[-1])
-
-    # Example: create unique sort order field by combining filename, and volume parameters
-    # create index sorted by vn_filename, raynum, scannum, elev
-    sort_dict = {}
-    fnames = matchups['vn_filename']
-    raynum = matchups['raynum']
-    scannum = matchups['scannum']
-    elev = matchups['elev']
-
-    # create index dictionary for sorting
-    for cnt in range(len(fnames)):
-        sort_str = fnames[cnt]+str(raynum[cnt])+str(scannum[cnt])+str(elev[cnt])
-#        print("cnt ", cnt, " sort str ", sort_str)
-        sort_dict[sort_str] = cnt
-
-    # sort by filename
-    sorted_index = []
-    for fname in sorted(sort_dict):
-        sorted_index.append(sort_dict[fname])
-
-    file1 = open("sort_test.txt", "w")  # write mode
-    for i in range(len(fnames)):
-        #print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
-        #      , scannum[sorted_index[i]], ",", elev[sorted_index[i]])
-        print(fnames[sorted_index[i]], ",", raynum[sorted_index[i]], ","
-              , scannum[sorted_index[i]], ",", elev[sorted_index[i]], file=file1)
-    file1.close()
+    for row in range(MRMSMatch.GPMFootprint.height): # image rows
+        for col in range(MRMSMatch.GPMFootprint.width): #image columns
+            fp = int(MRMSMatch.GPMFootprint.data[row][col]) # need to convert to int to index in VN_data
+            mrms_precip = MRMSMatch.MRMS.data[row][col]
+            gpm_precip = MRMSMatch.GPM.data[row][col]
+            if fp > 0 and fp in VN_data.keys(): # if fp >0 the row,col value for MRMS falls within a GPM footprint in the VN with precip
+                print("fp: ", fp, " mrms precip ", mrms_precip, " gpm precip ", gpm_precip)
+                # example loop to extract individual vn volumes from the footprint indexed VN_data class
+                volumes = VN_data[fp]
+                for volume in volumes: # loop through individual VN volume in GPM footprint (multiple elevations)
+                    print("   bottomHeight", volume["bottomHeight"], " GR_RC_rainrate ", volume["GR_RC_rainrate"])
+                # exit early for testing ***********************************
+                exit(0)
+            # else: # MRMS image value is not within a GPM footprint
+            #     print("no matching VN volume for MRMS data ")
 
     # elapsed time for metrics
     endts = datetime.datetime.now().timestamp()

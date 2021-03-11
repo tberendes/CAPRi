@@ -2,6 +2,8 @@
 #
 #  query_vn.py
 #
+#  Author:  Todd Berendes, UAH ITSC, March 2021
+#
 #  Description: this script queries data from the VN database on AWS and downloads a CSV
 #               result file, then parses out the values into a dictionary.  Optional saving of
 #               the CSV file is supported
