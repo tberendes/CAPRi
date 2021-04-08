@@ -41,7 +41,7 @@ def main():
     # initialize query parameters
     query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
     query.set_columns("time,latitude,longitude,GR_Z,Dm,gr_site,vn_filename,raynum,scannum,elev,typePrecip,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
-    #query.set_columns("bottomHeight,ruc_0_height,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
+    #query.set_columns("bottomHeight,zero_deg_height,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
     # added new column for s2ku adjusted GR reflectivity
     # column:  'GR_Z_s2ku'
 
@@ -85,15 +85,15 @@ def main():
 
 
     #Here’s what I have in mind for this…specify the parameter ‘topheight_below_ruc_0’=[some_value]
-    # and it queries the ruc_0_height column and topHeight column and returns the results
-    # where topHeight-ruc_0_height < [some_value]. Similarly for the bottomHeight…’bottomheight_above_ruc_0’=[some_value]
-    # which queries the ruc_0_height and bottomHeight columns and returns results where bottomHeight-ruc_0_height > [some_value].
+    # and it queries the zero_deg_height column and topHeight column and returns the results
+    # where topHeight-zero_deg_height < [some_value]. Similarly for the bottomHeight…’bottomheight_above_ruc_0’=[some_value]
+    # which queries the zero_deg_height and bottomHeight columns and returns results where bottomHeight-zero_deg_height > [some_value].
 
     # can use 'lt', 'lte', 'gt', 'gte', 'eq' for relation
-    #query.add_difference_threshold_filter('topHeight', 'ruc_0_height', 'lt', 1)
-    query.add_difference_threshold_filter('bottomHeight', 'ruc_0_height', 'lt', -1)
+    #query.add_difference_threshold_filter('topHeight', 'zero_deg_height', 'lt', 1)
+    query.add_difference_threshold('bottomHeight', 'zero_deg_height', 'lt', -1)
 
-    #query.add_range_filter('ruc_0_height', 0.0, 2.0)
+    #query.add_range_filter('zero_deg_height', 0.0, 2.0)
 
     # submit query to AWS
     res = query.submit_query()

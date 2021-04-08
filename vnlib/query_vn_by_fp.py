@@ -46,20 +46,20 @@ def main():
     # use fields from the filename to query database to get only matching site data
     #GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin
     # Parse filename to set query parameters to retrieve VN data from Athena
-    parsed=mrms_filename.split('.')
+    parsed = mrms_filename.split('.')
     site = parsed[1]
     date_field = parsed[2]
-    year='20'+date_field[0:2]
-    month=date_field[2:4]
-    day=date_field[4:6]
+    year = '20' + date_field[0:2]
+    month = date_field[2:4]
+    day = date_field[4:6]
     # may want to add orbit number to database
-    orbit=parsed[3]
+    orbit = parsed[3]
     # for now do a "like" match on the begining of the filename up to the orbit number
-    gpm_version=parsed[4]
-    vn_fn = os.path.basename(mrms_filename).split('.'+gpm_version+'.')[0]+'.'
-    sensor=parsed[5]
-    scan=parsed[6]
-    vn_version=parsed[7].replace('_','.')
+    gpm_version = parsed[4]
+    vn_fn = os.path.basename(mrms_filename).split('.' + gpm_version + '.')[0] + '.'
+    sensor = parsed[5]
+    scan = parsed[6]
+    vn_version = parsed[7].replace('_', '.')
 
     # set up db query and fp based dictionary of results
 
@@ -67,20 +67,39 @@ def main():
     # initialize query class to start a new query
     query = vnlib.VNQuery()
 
+    # can call an API to get a list of column names defined in the Athena table
+    res = query.get_columns()
+    if res['status'] != 'success':
+        print("Column name query failed: ", res['message'])
+        exit(-1)
+    columns = res['columns']
+    print ("Athena column names: ",columns)
+
+    #exit(0)
+
     # initialize query parameters
     # set columns to retrieve from database
+    # note that Athena is not case sensitive during query, but column names in the result will
+    # use the same case as the column names passed into the set_columns function
     columns='fp,time,latitude,longitude,GR_Z,zFactorCorrected,GR_RC_rainrate,PrecipRate,typePrecip,BBheight,meanBB,BBprox,topHeight,bottomHeight'
     query.set_columns(columns)
+    # can add more columns
+    #query.add_column('column_name')
 
-    query.set_scan(scan)
-    query.set_sensor(sensor)
+    # add variables and/or properties for the selected VN matchup file to restrict query to only the matchup file
+    query.add_scan_match(scan)
+    query.add_sensor_match(sensor)
+    query.add_vn_filename_match(vn_fn+"%") # use filename to restrict orbit since orbit isn't in DB yet, % is wildcard
+    query.add_gpm_version_match(gpm_version)
+    query.add_vn_version_match(vn_version)
+
+    # match only this GR site
+    query.add_gr_site_match(site)
+
+    # set a fixed time range for date of the
     query.set_time_range(year+"-"+month+"-"+day+" 00:00:00", year+"-"+month+"-"+day+" 23:59:59")
-    query.set_vn_filename(vn_fn+"%") # use filaneme to restrict orbit since orbit isn't in DB yet
-    query.set_gpm_version(gpm_version)
-    query.set_vn_version(vn_version)
-    query.set_gr_site(site)
 
-    print(query.params)
+    print("query parameters: ", query.params)
 
     ts = datetime.datetime.now().timestamp()
     print("start time: ", ts)
