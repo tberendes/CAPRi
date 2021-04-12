@@ -38,37 +38,41 @@ def main():
     # initialize query class to start a new query
     query = vnlib.VNQuery()
 
+    # can call an API to get a list of column names defined in the Athena table
+    res = query.get_columns()
+    if res['status'] != 'success':
+        print("Column name query failed: ", res['message'])
+        exit(-1)
+    columns = res['columns']
+    print ("Athena column names: ",columns)
+
+
     # initialize query parameters
     query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
     query.set_columns("time,latitude,longitude,GR_Z,Dm,gr_site,vn_filename,raynum,scannum,elev,typePrecip,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
-    #query.set_columns("bottomHeight,zero_deg_height,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
-    # added new column for s2ku adjusted GR reflectivity
-    # column:  'GR_Z_s2ku'
+    # can add more columns
+    #query.add_column('column_name')
 
     #Various available filter methods, can use in any combination:
     #query.set_gr_site("KFSD")
     # query.set_lat_lon_box(start_lat, end_lat, start_lon, end_lon)
     # query.set_inner_swath(start_ray, end_ray)
     # query.set_inner_swath(start_ray, end_ray)
-    # query.set_gpm_version(version)
-    # query.set_vn_version(version)
-    # query.set_scan(type)
-    # query.set_sensor(type)
-    # query.set_gr_site(site)
-    # query.set_gr_site_exclude(site)
-    # query.set_zfact_measured_range(min,max)
-    # query.set_zfact_corrected_range(min,max)
-    # query.set_grz_range(min,max)
-    # query.set_dm_range(min,max)
-    # query.set_gr_dm_range(min,max)
-    # query.set_site_percent_rainy_range(min,max)
-    # query.set_site_fp_count_range(min,max)
+    # query.add_gpm_version_match(version)
+    # query.add_vn_version_match(version)
+    # query.add_scan_match(scan_type)
+    # query.add_sensor_match(sensor_type)
+    # query.add_gr_site_match(site)
+    # query.add_gr_site_exclude(site)
+    # query.add_variable_min("variable_name",min)
+    # query.add_variable_max("variable_name",max)
+    # query.add_variable_range("variable_name",min,max)
 
     # convenience functions for setting up filtering options commonly used in VN analysis
     # query.set_beam_filling_thresh_gr(value_0_100)
     # query.set_beam_filling_thresh_dpr(value_0_100)
     # query.set_beam_filling_thresh(value_0_100)
-    # query.set_blockage_thresh(value_0_100)
+    # query.set_blockage_thresh_gr(value_0_100)
 
     # These filters can be used in combination to replicate the filtering of our old IDL plots
     # I tried to duplicate the algorithms Bob used in the IDL code and created a meanBB variable for each
@@ -102,7 +106,7 @@ def main():
         exit(-1)
 
     # download csv file, may specify optional filename
-    # if optional filename is ommitted, uses temporary file
+    # if optional filename is omitted, uses temporary file
     # which is automatically deleted on exit of program
     # check 'status' entry for 'success' or 'failed'
     res = query.download_csv(filename="test_csv.csv")

@@ -111,7 +111,7 @@ def main():
         exit(-1)
 
     # download csv file, may specify optional filename
-    # if optional filename is ommitted, uses temporary file
+    # if optional filename is omitted, uses temporary file
     # which is automatically deleted on exit of program
     # check 'status' entry for 'success' or 'failed'
     # this function loops until success or failure
