@@ -281,12 +281,23 @@ def process_file(filename, alt_bright_band):
                         varDict_fpdim['SurfPrecipTotRate'] =  nc.variables['surfPrecipTotRate'+add][:]  # fpdim
                         varDict_fpdim['heightStormTop'] = np.empty_like(varDict_fpdim['piaFinal'])
                         varDict_fpdim['heightStormTop'][:] = -9999.0
+                        # TODO: currently PrecipMeanHigh is only generated for DPR files, will need to add DPRGMI when available
+                        varDict_fpdim['MRMSPrecip'] = np.empty_like(varDict_fpdim['piaFinal'])
+                        varDict_fpdim['MRMSPrecip'][:] = -9999.0
+
                     else:
                         varDict_fpdim['piaFinal'] = nc.variables['piaFinal'][:]  # fpdim
                         varDict_fpdim['PrecipRateSurface'] =  nc.variables['PrecipRateSurface'+add][:]  # fpdim
                         varDict_fpdim['SurfPrecipTotRate'] =  nc.variables['SurfPrecipTotRate'+add][:]  # fpdim
         #            varDict_fpdim['heightStormTop'] = nc.variables['heightStormTop'][:]   # fpdim
                         varDict_fpdim['heightStormTop'] = (nc.variables['heightStormTop'+add][:] / 1000.0) - site_elev  # fpdim
+
+                        if 'PrecipMeanHigh' in nc.variables.keys():
+                            varDict_fpdim['MRMSPrecip'] = nc.variables['PrecipMeanHigh']
+                        else: # MRMS not present in DPR file
+                            varDict_fpdim['MRMSPrecip'] = np.empty_like(varDict_fpdim['piaFinal'])
+                            varDict_fpdim['MRMSPrecip'][:] = -9999.0
+
                     varDict_fpdim['scanNum'] =  nc.variables['scanNum'+add][:]  # fpdim
                     varDict_fpdim['rayNum'] =  nc.variables['rayNum'+add][:]  # fpdim
         #            varDict_fpdim['BBheight'] =  nc.variables['BBheight'][:]  # fpdim
