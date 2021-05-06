@@ -38,8 +38,13 @@ def main():
     # assumes filename format used in the Java VN matchup program for MRMS data
     # and also assumes that the footprint and GPM images (.bin files) are in the same directory
     MRMSMatch = vnlib.MRMSToGPM(mrms_filename)
+    #MRMSMatch.set_flip_flag(True) #set this if you want to access data in image coordinates (lat ascending in y coords)
 
-    print('fp ', MRMSMatch.GPMFootprint.data[0][0], ' gpm ', MRMSMatch.GPM.data[0][0], ' mrms ', MRMSMatch.MRMS.data[0][0])
+    fp_data = MRMSMatch.GPMFootprint.get_data()
+    mrms_data = MRMSMatch.MRMS.get_data()
+    gpm_data = MRMSMatch.GPM.get_data()
+
+    print('fp ', fp_data[0][0], ' gpm ', gpm_data[0][0], ' mrms ', mrms_data[0][0])
     (lat,lon) = MRMSMatch.MRMS.get_lat_lon(0,0)
     print('lat ', lat, ' lon ', lon)
 
@@ -162,12 +167,11 @@ def main():
 
     # # Now we can loop through MRMSMatch class MRMS gridded GPMFootprint image
     # to retrieve VN query information for each matching MRMS value
-
     for row in range(MRMSMatch.GPMFootprint.height): # image rows
         for col in range(MRMSMatch.GPMFootprint.width): #image columns
-            fp = int(MRMSMatch.GPMFootprint.data[row][col]) # need to convert to int to index in VN_data
-            mrms_precip = MRMSMatch.MRMS.data[row][col]
-            gpm_precip = MRMSMatch.GPM.data[row][col]
+            fp = int(fp_data[row][col]) # need to convert to int to index in VN_data
+            mrms_precip = mrms_data[row][col]
+            gpm_precip = gpm_data[row][col]
             if fp > 0 and fp in VN_data.keys(): # if fp >0 the row,col value for MRMS falls within a GPM footprint in the VN with precip
                 print("fp: ", fp, " mrms precip ", mrms_precip, " gpm precip ", gpm_precip)
                 # example loop to extract individual vn volumes from the footprint indexed VN_data class

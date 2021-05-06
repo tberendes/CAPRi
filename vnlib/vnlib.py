@@ -617,7 +617,8 @@ class MRMSToGPM:
             self.load_data(filename)
         # convert x and y coordinates to lat, lon
         def get_lat(self,y):
-            if self.flip_flag:
+            # note, fixed bug here, added "not"
+            if not self.flip_flag:
                 lat = y * self.llResolution + self.llLat
             else:
                 lat = (self.height - y - 1) * self.llResolution + self.llLat
@@ -653,8 +654,13 @@ class MRMSToGPM:
                 data = struct.unpack('>{0}f'.format(size), data_file.read(4 * size))
                 self.data = np.asarray(data).reshape(shape)
                 # flip line order if flip_flag is set to true
-                if self.flip_flag:
-                    self.data = np.flip(self.data, 0)  # data is packed in ascending latitude
+                #if self.flip_flag:
+                #    self.data = np.flip(self.data, 0)  # data is packed in ascending latitude
+        def get_data(self):
+            if self.flip_flag:
+                return np.flip(self.data, 0)  # data is packed in ascending latitude
+            else:
+                return self.data  # data is packed in ascending latitude
 
     def load_data(self, mrms_filename):
         # construct footprint and GPM filenames from MRMS filename
@@ -663,3 +669,8 @@ class MRMSToGPM:
         self.GPM = self.binaryFile(gpm_filename)
         fp_filename = mrms_filename.split('.mrms.bin')[0]+'.fp.bin'
         self.GPMFootprint = self.binaryFile(fp_filename)
+
+    def set_flip_flag(self,value):
+        self.MRMS.set_flip_flag(value)
+        self.GPM.set_flip_flag(value)
+        self.GPMFootprint.set_flip_flag(value)
