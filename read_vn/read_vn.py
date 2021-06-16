@@ -15,17 +15,16 @@
 import csv
 # --Do all the necessary imports
 import gzip
+import logging
 import os
-import random
-import string
 import sys
 from io import BytesIO
+from time import sleep
 
 import boto3 as boto3
-import certifi
-import urllib3
 import json2parquet
 #from json2parquet import ingest_data, write_parquet
+from botocore.exceptions import ClientError
 from netCDF4 import Dataset as NetCDFFile
 from netCDF4 import chartostring
 import numpy as np
@@ -40,6 +39,9 @@ session = boto3.Session(profile_name='CAPRI')
 # Any clients created from this session will use credentials
 # from the [CAPRI] section of ~/.aws/credentials.
 client = session.client('s3')
+
+num_retries = 10
+sleep_secs = 20
 
 def zip_string(str_data: str) -> bytes:
     btsio = BytesIO()
@@ -536,18 +538,39 @@ def process_file(filename, alt_bright_band):
     return outputJson
 
 #    return json.dumps(districtPrecipStats)
+def upload_file(local_file, s3_bucket, s3_key):
+    upload=False
+    for i in range(num_retries):
+        try:
+            response = client.upload_file(local_file, s3_bucket, s3_key)
+            upload=True
+            break
+        except ClientError as e:
+            logging.error(e)
+            print("Error during file upload " + s3_key + " to S3 bucket " + s3_bucket + " ...")
+            print(e)
+            sleep(sleep_secs)
+            print("retry ", i,'/',num_retries)
+    return upload
 
 def upload_s3(local_file, s3_bucket, s3_key, overwrite):
+    success = False
     try:
+        # head_object will return exception if file does not already exist
         client.head_object(Bucket=s3_bucket, Key=s3_key)
         if overwrite:
             print("file " + s3_key + " is already in S3 bucket " + s3_bucket + ", Overwriting ...")
-            client.upload_file(local_file, s3_bucket, s3_key)
+            #client.upload_file(local_file, s3_bucket, s3_key)
+            success = upload_file(local_file, s3_bucket, s3_key)
         else:
             print("file " + s3_key + " is already in S3 bucket " + s3_bucket + ", Skipping ...")
     except:
         print("Uploading " + s3_key + " to S3 bucket " + s3_bucket + " ...")
-        client.upload_file(local_file, s3_bucket, s3_key)
+        #client.upload_file(local_file, s3_bucket, s3_key)
+        success = upload_file(local_file, s3_bucket, s3_key)
+    if not success:
+        print("Fatal error: Could not upload " + s3_key + " to S3 bucket " + s3_bucket )
+    return success
 
 def read_alt_bb_file(filename):
     alt_bb_dict = {}
@@ -708,43 +731,56 @@ def main():
                     if config['upload_parquet']:
                         #print("uploading parquet "+os.path.join(OUT_DIR,file+'.parquet'))
                         parquet_key = config['s3_parquet_dir']+'/'+file+'.parquet'
-                        upload_s3(os.path.join(config['OUT_DIR'],file+'.parquet',), config['s3_bucket'], parquet_key,config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(config['OUT_DIR'],file+'.parquet',), config['s3_bucket'], parquet_key,config['overwrite_upload_flag']):
+                            exit(-1)
 
                     if config['upload_meta']:
                         #print("uploading metadata "+os.path.join(META_DIR,file+'.meta.json'))
                         metadata_key = config['s3_meta_dir']+'/'+file+'.meta.json'
-                        upload_s3(os.path.join(config['META_DIR'],file+'.meta.json'), config['s3_bucket'], metadata_key,config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(config['META_DIR'],file+'.meta.json'), config['s3_bucket'], metadata_key,config['overwrite_upload_flag']):
+                            exit(-1)
 
                 # look for deep leraning training and image files with same base filename
                 # put deep learning binary files and images in S3
                 if config['upload_bin']:
                     # check for GPM and MRMS DL training files (.bin)
                     if os.path.isfile(os.path.join(root, file + '.gpm.bin')):
-                        upload_s3(os.path.join(root,file+'.gpm.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.gpm.bin',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.gpm.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.gpm.bin',config['overwrite_upload_flag']):
+                            exit(-1)
                     if os.path.isfile(os.path.join(root, file + '.mrms.bin')):
-                        upload_s3(os.path.join(root,file+'.mrms.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.mrms.bin',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.mrms.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.mrms.bin',config['overwrite_upload_flag']):
+                            exit(-1)
                     if os.path.isfile(os.path.join(root, file + '.fp.bin')):
-                        upload_s3(os.path.join(root,file+'.fp.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.fp.bin',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.fp.bin'), config['s3_bucket'], config['s3_bin_dir']+'/'+file+'.fp.bin',config['overwrite_upload_flag']):
+                            exit(-1)
 
                 if config['upload_img']:
                     # check for GPM and MRMS DL images and kml files
                     if os.path.isfile(os.path.join(root, file + '.gpm.bw.png')):
-                        upload_s3(os.path.join(root,file+'.gpm.bw.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.bw.png',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.gpm.bw.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.bw.png',config['overwrite_upload_flag']):
+                            exit(-1)
                     if os.path.isfile(os.path.join(root, file + '.gpm.bw.kml')):
-                        upload_s3(os.path.join(root,file+'.gpm.bw.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.bw.kml',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.gpm.bw.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.bw.kml',config['overwrite_upload_flag']):
+                            exit(-1)
                     if os.path.isfile(os.path.join(root, file + '.gpm.col.png')):
-                        upload_s3(os.path.join(root,file+'.gpm.col.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.col.png',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.gpm.col.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.col.png',config['overwrite_upload_flag']):
+                            exit(-1)
                     if os.path.isfile(os.path.join(root, file + '.gpm.col.kml')):
-                        upload_s3(os.path.join(root,file+'.gpm.col.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.col.kml',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.gpm.col.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.gpm.col.kml',config['overwrite_upload_flag']):
+                            exit(-1)
 
                     if os.path.isfile(os.path.join(root, file + '.mrms.bw.png')):
-                        upload_s3(os.path.join(root,file+'.mrms.bw.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.bw.png',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.mrms.bw.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.bw.png',config['overwrite_upload_flag']):
+                            exit(-1)
                     if os.path.isfile(os.path.join(root, file + '.mrms.bw.kml')):
-                        upload_s3(os.path.join(root,file+'.mrms.bw.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.bw.kml',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.mrms.bw.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.bw.kml',config['overwrite_upload_flag']):
+                            exit(-1)
                     if os.path.isfile(os.path.join(root, file + '.mrms.col.png')):
-                        upload_s3(os.path.join(root,file+'.mrms.col.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.col.png',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.mrms.col.png'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.col.png',config['overwrite_upload_flag']):
+                            exit(-1)
                     if os.path.isfile(os.path.join(root, file + '.mrms.col.kml')):
-                        upload_s3(os.path.join(root,file+'.mrms.col.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.col.kml',config['overwrite_upload_flag'])
+                        if not upload_s3(os.path.join(root,file+'.mrms.col.kml'), config['s3_bucket'], config['s3_img_dir']+'/'+file+'.mrms.col.kml',config['overwrite_upload_flag']):
+                            exit(-1)
 
                 #sys.exit()
 

@@ -1,9 +1,6 @@
-netCDF4
-matplotlib
+logging
 boto3
-certifi
-requests
-urllib3
 json2parquet
+botocore
+netCDF4
 numpy
-pyarrow
