@@ -1,0 +1,6 @@
+logging
+boto3
+json2parquet
+botocore
+netCDF4
+numpy
