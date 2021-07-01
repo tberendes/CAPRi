@@ -11,6 +11,7 @@
 #
 # ---------------------------------------------------------------------------------------------
 import gzip
+import pickle
 from io import BytesIO
 from netCDF4 import Dataset as NetCDFFile
 import numpy as np
@@ -21,16 +22,31 @@ import csv
 
 def read_alt_bb_file(filename):
     alt_bb_dict = {}
-    with open(filename) as csvfile:
-        readCSV = csv.reader(csvfile, delimiter='|')
-        for row in readCSV:
-            radar_id=row[0]
-            orbit = int(row[1])
-#            height = 1000.0 * float(row[2]) # in meters
-            height = float(row[2]) # in km
-            if radar_id not in alt_bb_dict.keys():
-                alt_bb_dict[radar_id] = {}
-            alt_bb_dict[radar_id][orbit] = height
+    # check to see if .pcl is in filename, assume pickle file is passed as filename
+    if str(filename).endswith('.pcl'):
+        read_from_csv=False
+    else:
+        read_from_csv=True
+
+    if not read_from_csv:
+        print("reading pickled BB file " + filename)
+        f = open(filename, "rb")
+        alt_bb_dict = pickle.load(f)
+        f.close()
+    else:
+        # read csv (delimited with '|')
+        print("reading CSV BB file " + filename)
+        with open(filename) as csvfile:
+            readCSV = csv.reader(csvfile, delimiter='|')
+            for row in readCSV:
+                radar_id=row[0]
+                orbit = int(row[1])
+    #            height = 1000.0 * float(row[2]) # in meters
+                height = float(row[2]) # in km
+                if radar_id not in alt_bb_dict.keys():
+                    alt_bb_dict[radar_id] = {}
+                alt_bb_dict[radar_id][orbit] = height
+
     return alt_bb_dict
 
 

@@ -9,8 +9,10 @@
       <excludeFolder url="file://$MODULE_DIR$/.aws-sam" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
       <excludeFolder url="file://$MODULE_DIR$/venv_new" />
+      <excludeFolder url="file://$MODULE_DIR$/venv_homebrew" />
+      <excludeFolder url="file://$MODULE_DIR$/venv_fix" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.8 (CAPRi)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.8 (CAPRi) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

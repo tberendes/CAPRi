@@ -2,8 +2,10 @@
 #
 #  read_vn.py
 #
-#  Description: as the file name suggests this script reads data from an GPM VN file, formatted in netCDF
-#               and parses out the values and formats output for JSON
+#  Description: This program processes local subdirectories of GPM VN files, formatted in netCDF
+#               and parses out the values and formats output for JSON and uploads to s3 bucket.
+#               This is a stand-alone version the VN to Athena conversion process that produces
+#               local output and can upload to S3 using Boto with credentials
 #
 #  Syntax: currently no input parameters
 #

@@ -1,4 +1,3 @@
-logging
 boto3
 json2parquet
 botocore

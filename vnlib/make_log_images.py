@@ -19,13 +19,13 @@ import os
 import datetime
 
 import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+from matplotlib import pyplot as plt, ticker
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap, LogNorm
 
 import vnlib
 import colormap
 
-def plot_with_log(title, data, log_data, cm):
+def plot_with_log(title, data, cm):
     plt.clf()
     plt.cla()
     plt.subplot(211, xticks=[], yticks=[])
@@ -41,16 +41,22 @@ def plot_with_log(title, data, log_data, cm):
     cb1.update_ticks()
     plt.subplot(212, xticks=[], yticks=[])
     #    plt.subplot(223)
-    plt.imshow(log_data, cmap=cm, vmin=-1, vmax=np.log10(100.0))
+    #plt.imshow(log_data, cmap=cm, vmin=-1, vmax=np.log10(100.0))
+    plt.imshow(data, cmap=cm, norm=LogNorm(vmin=.1, vmax=100))
     # plt.imshow(gpm_data, cmap=cm, vmin=0.0, vmax=60.0)
     # plt.imshow(log_gpm, cmap=cm, vmin=0.01, vmax=np.log10(60.0))
     # plt.imshow(np.random.random((100, 100)) * 60, cmap=cm)
 
     cax2 = plt.axes([0.65, 0.1, 0.075, 0.36])
     cb2 = plt.colorbar(cax=cax2)
-    cb2.set_label('Log10(Rain rate) log10[mm/hr]', rotation=-90, color='k', labelpad=20)
+    #cb2.set_label('Log10(Rain rate) log10[mm/hr]', rotation=-90, color='k', labelpad=20)
+    cb2.set_label('Rain rate [mm/hr]', rotation=-90, color='k', labelpad=20)
     # cb.minorticks_on()
-    cb2.set_ticks([-1, 0, 1, 2], update_ticks=True)
+    #cax2.get_yaxis().set_major_formatter(ticker.LogFormatter(base=10.0, labelOnlyBase=False, minor_thresholds=None, linthresh=None))
+    #cb2.ax.get_yaxis().set_major_formatter(ticker.FormatStrFormatter('%0.0e'))
+
+    #cb2.set_ticks([-1, 0, 1, 2], update_ticks=True)
+    #cb2.set_ticks([1.0e-1, 1.0e0, 1.0e1, 1.0e2], update_ticks=True)
     # cb.set_ticks([0,10,20,30,40,50,60], update_ticks=True)
     cb2.update_ticks()
 
@@ -119,8 +125,10 @@ def main():
     ind = 0
     for row in colormap.colormap.data:
         if ind == 0:
-            entry = (0.0,0.0,0.0,0.0)
+            entry = (float(row[0]) / 255.0, float(row[1]) / 255.0, float(row[2]) / 255.0, 0.0)
+#            entry = (0.0,0.0,0.0,0.0)
             colors.append(entry)
+            entry = (float(ind) / 255.0, float(ind) / 255.0, float(ind) / 255.0, 0.0)
             bw.append(entry)
         else:
             entry = (float(row[0]) / 255.0, float(row[1]) / 255.0, float(row[2]) / 255.0, 1.0)
@@ -132,6 +140,7 @@ def main():
     # color
 #    cm = LinearSegmentedColormap.from_list('Colors', colors, N=256)
     cm = ListedColormap(colors, N=256)
+    bm = ListedColormap(bw, N=256)
     #    plt.imshow(np.random.random((100, 100))*60, cmap=plt.cm.BuPu_r)
     #plt.imshow(np.random.random((100, 100)) * 60, cmap=cm)
 
@@ -171,15 +180,26 @@ def main():
     log_mrms[a] = np.log10(log_mrms[a])
 
 #    plt.imsave('mrms_log.png', log_mrms, cmap=cm, vmin=0.01, vmax=np.log10(60.0))
+
     plt.imsave('mrms_log.png', log_mrms, cmap=cm, vmin=-1, vmax=np.log10(100.0))
     plt.imsave('mrms.png', mrms_data, cmap=cm, vmin=0.0, vmax=60.0)
     plt.imsave('gpm_log.png', log_gpm, cmap=cm, vmin=-1, vmax=np.log10(100.0))
     plt.imsave('gpm.png', gpm_data, cmap=cm, vmin=0.0, vmax=60.0)
 
-    plot_with_log('MRMS ' + site +' ' + date, mrms_data, log_mrms, cm)
+    plt.imsave('mrms_log_bw.png', log_mrms, cmap=bm, vmin=-1, vmax=np.log10(100.0))
+    plt.imsave('mrms_bw.png', mrms_data, cmap=bm, vmin=0.0, vmax=60.0)
+    plt.imsave('gpm_log_bw.png', log_gpm, cmap=bm, vmin=-1, vmax=np.log10(100.0))
+    plt.imsave('gpm_bw.png', gpm_data, cmap=bm, vmin=0.0, vmax=60.0)
+
+    plot_with_log('MRMS ' + site +' ' + date, mrms_data, cm)
     plt.savefig('mrms_fig.png',dpi = (200))
-    plot_with_log('GPM ' + site +' ' + date, gpm_data, log_gpm, cm)
+    plot_with_log('GPM ' + site +' ' + date, gpm_data, cm)
     plt.savefig('gpm_fig.png',dpi = (200))
+
+    plot_with_log('MRMS ' + site +' ' + date, mrms_data, bm)
+    plt.savefig('mrms_bw_fig.png',dpi = (200))
+    plot_with_log('GPM ' + site +' ' + date, gpm_data, bm)
+    plt.savefig('gpm_bw_fig.png',dpi = (200))
 
     # # Now we can loop through MRMSMatch class MRMS gridded GPMFootprint image
     # to retrieve VN query information for each matching MRMS value
