@@ -49,8 +49,6 @@ def lambda_handler(event, context):
             "alt_bb_bucket": "capri-data",
             "alt_bb_file": "vn_mirror/BB/GPM_rain_event_bb_km.txt.pcl",
             "s3_bucket_out": "capri-vn-data",
-            "site_pattern_start": ["K"],
-            "site_pattern_substr": [],
         }
         out_dir = config["OUT_DIR"]
         bb_file = config["alt_bb_file"]

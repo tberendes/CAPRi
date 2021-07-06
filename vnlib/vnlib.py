@@ -589,6 +589,74 @@ class VNQuery:
 
         return {'status':'success', 'message':'Successfully downloaded columns names', 'columns':lines}
 
+
+class binaryFile:
+    def __init__(self, filename):
+        self.data = None
+        self.width = None  # longitude direction
+        self.height = None  # latitude direction
+        self.llLat = None  # lower left corner
+        self.llLon = None
+        self.llResolution = None
+        self.header_size = 5
+        # note: data is written in ascending lat, lon (i.e. lower left on map)
+        # if you want to access data in image style coordinate (i.e. upper left descending)
+        # you need to flip the line order of the numpy array by setting flip_flag = True
+        # be sure to set flip flag to "True" if you are creating an image from the binary array (png, etc)
+        self.flip_flag = False
+
+        self.load_data(filename)
+
+    # convert x and y coordinates to lat, lon
+    def get_lat(self, y):
+        # note, fixed bug here, added "not"
+        if not self.flip_flag:
+            lat = y * self.llResolution + self.llLat
+        else:
+            lat = (self.height - y - 1) * self.llResolution + self.llLat
+        return lat
+
+    def get_lon(self, x):
+        return x * self.llResolution + self.llLon
+
+    def set_flip_flag(self, trueOrFalse):
+        self.flip_flag = trueOrFalse
+
+    def get_lat_lon(self, x, y):
+        return (self.get_lat(y), self.get_lon(x))
+
+    def __del__(self):
+        # Destructor:
+        pass
+
+    # Charles code
+    def load_data(self, path):
+        with open(path, 'rb') as data_file:
+            # note: data is written in ascending lat, lon (i.e. lower left on map)
+            # if you want to access data in image style coordinate (i.e. upper left descending)
+            # you need to flip the line order of the numpy array
+            header = struct.unpack('>{0}f'.format(self.header_size), data_file.read(4 * self.header_size))
+            self.width = int(header[0])
+            self.height = int(header[1])
+            self.llLat = header[2]
+            self.llLon = header[3]
+            self.llResolution = header[4]
+            size = int(self.width * self.height)
+            shape = (int(self.height), int(self.width))
+
+            data = struct.unpack('>{0}f'.format(size), data_file.read(4 * size))
+            self.data = np.asarray(data).reshape(shape)
+            # flip line order if flip_flag is set to true
+            # if self.flip_flag:
+            #    self.data = np.flip(self.data, 0)  # data is packed in ascending latitude
+
+    def get_data(self):
+        if self.flip_flag:
+            return np.flip(self.data, 0)  # data is packed in ascending latitude
+        else:
+            return self.data  # data is packed in ascending latitude
+
+
 class MRMSToGPM:
     def __init__(self, mrms_filename):
         self.MRMS=None
@@ -600,75 +668,13 @@ class MRMSToGPM:
     def __del__(self):
         # Destructor:
         pass
-    class binaryFile:
-        def __init__(self,filename):
-            self.data = None
-            self.width = None # longitude direction
-            self.height = None # latitude direction
-            self.llLat = None # lower left corner
-            self.llLon = None
-            self.llResolution = None
-            self.header_size = 5
-            # note: data is written in ascending lat, lon (i.e. lower left on map)
-            # if you want to access data in image style coordinate (i.e. upper left descending)
-            # you need to flip the line order of the numpy array by setting flip_flag = True
-            self.flip_flag = False
-
-            self.load_data(filename)
-        # convert x and y coordinates to lat, lon
-        def get_lat(self,y):
-            # note, fixed bug here, added "not"
-            if not self.flip_flag:
-                lat = y * self.llResolution + self.llLat
-            else:
-                lat = (self.height - y - 1) * self.llResolution + self.llLat
-            return lat
-
-        def get_lon(self,x):
-            return x * self.llResolution + self.llLon
-
-        def set_flip_flag(self,trueOrFalse):
-            self.flip_flag = trueOrFalse
-
-        def get_lat_lon(self, x, y):
-            return (self.get_lat(y), self.get_lon(x))
-
-        def __del__(self):
-            # Destructor:
-            pass
-        # Charles code
-        def load_data(self,path):
-            with open(path, 'rb') as data_file:
-                # note: data is written in ascending lat, lon (i.e. lower left on map)
-                # if you want to access data in image style coordinate (i.e. upper left descending)
-                # you need to flip the line order of the numpy array
-                header = struct.unpack('>{0}f'.format(self.header_size), data_file.read(4 * self.header_size))
-                self.width = int(header[0])
-                self.height = int(header[1])
-                self.llLat = header[2]
-                self.llLon = header[3]
-                self.llResolution = header[4]
-                size = int(self.width * self.height)
-                shape = (int(self.height), int(self.width))
-
-                data = struct.unpack('>{0}f'.format(size), data_file.read(4 * size))
-                self.data = np.asarray(data).reshape(shape)
-                # flip line order if flip_flag is set to true
-                #if self.flip_flag:
-                #    self.data = np.flip(self.data, 0)  # data is packed in ascending latitude
-        def get_data(self):
-            if self.flip_flag:
-                return np.flip(self.data, 0)  # data is packed in ascending latitude
-            else:
-                return self.data  # data is packed in ascending latitude
-
     def load_data(self, mrms_filename):
         # construct footprint and GPM filenames from MRMS filename
-        self.MRMS = self.binaryFile(mrms_filename)
+        self.MRMS = binaryFile(mrms_filename)
         gpm_filename = mrms_filename.split('.mrms.bin')[0]+'.gpm.bin'
-        self.GPM = self.binaryFile(gpm_filename)
+        self.GPM = binaryFile(gpm_filename)
         fp_filename = mrms_filename.split('.mrms.bin')[0]+'.fp.bin'
-        self.GPMFootprint = self.binaryFile(fp_filename)
+        self.GPMFootprint = binaryFile(fp_filename)
 
     def set_flip_flag(self,value):
         self.MRMS.set_flip_flag(value)
