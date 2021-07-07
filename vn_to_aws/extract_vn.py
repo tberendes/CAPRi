@@ -158,6 +158,7 @@ def process_file(filename, alt_bright_band):
                 #print(nc.variables)
                 #nc = NetCDFFile(filename)
                 addlist=[]
+                have_mrms = False
                 if filename.find('DPRGMI')>=0:
                     data_is_dprgmi = True
                     addlist=['_NS','_MS']
@@ -309,6 +310,7 @@ def process_file(filename, alt_bright_band):
 
                         if 'PrecipMeanHigh' in nc.variables.keys():
                             varDict_fpdim['MRMSPrecip'] = nc.variables['PrecipMeanHigh']
+                            have_mrms = True
                         else: # MRMS not present in DPR file
                             varDict_fpdim['MRMSPrecip'] = np.empty_like(varDict_fpdim['piaFinal'])
                             varDict_fpdim['MRMSPrecip'][:] = -9999.0
@@ -548,4 +550,4 @@ def process_file(filename, alt_bright_band):
 
     gz.close()
 
-    return outputJson
+    return have_mrms, outputJson

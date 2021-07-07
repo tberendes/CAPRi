@@ -1,3 +1,14 @@
+# ---------------------------------------------------------------------------------------------
+#
+#  capri_pickle_csv.py
+#
+#  Author:  Todd Berendes, UAH ITSC, July 2021
+#
+#  Description: This program reads a csv file into a dictionary and saves it as a binary "pickle" file.
+#               The .pcl file corresponds to the Bright Band file used in the capri_vn_to_db.py program.
+#  Syntax: currently no input parameters
+#
+# ---------------------------------------------------------------------------------------------
 import sys
 from urllib.parse import unquote_plus, urlparse, urljoin
 import pickle

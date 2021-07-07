@@ -1,12 +1,14 @@
 # ---------------------------------------------------------------------------------------------
 #
-#  capri_vn_bin_to_png.py
+#  capri_vn_wrap_kml.py
 #
 #  Author:  Todd Berendes, UAH ITSC, July 2021
 #
-#  Description: this program reads and converts a binary VN rain rate file to color indexed PNG
-#  using both linear and log scales in color and B/W
-#  Currently, the color bars are set up for 0 to 60 (linear) and -1 to 100 (log) ranges (rain rate).
+#  Description: this program reads a kml file created by the MRMS to VN matchup process and creates
+#  wrapper files for all of the images created by capri_vn_bin_to_png.py
+#  Note that only the *.gpm.col.kml file upload triggers the lambda, and the other combinations are
+#  constructed from that file, i.e. .gpm.bw.kml .gpm.col_log.kml .gpm.bw_log.kml
+#  Also, the four variations for the mrms imagery are created.
 #
 #  Syntax: currently no input parameters
 #
@@ -15,6 +17,9 @@
 import vnlib
 import boto3 as boto3
 from urllib.parse import unquote_plus
+from pykml import parser
+from lxml import etree, objectify
+from pykml.factory import KML_ElementMaker as KML
 
 import numpy as np
 
@@ -28,6 +33,47 @@ from vnlib import colormap
 
 s3 = boto3.resource(
     's3')
+
+# note: doc object is not copied, so modifications will affect original object passed into function
+def write_kml(png_file, doc, outdir):
+    outfn = outdir+'/'+str(png_file).split('.png')[0]+'.kml'
+    root = doc.getroot()
+    root.Folder.GroundOverlay.name=KML.name(png_file)
+    root.Folder.GroundOverlay.Icon.href=KML.href(png_file)
+
+    objectify.deannotate(root, cleanup_namespaces=True)
+
+    with open(outfn, "w") as f:
+        print('<?xml version="1.0" encoding="UTF-8"?>' + '\n' + etree.tostring(doc, pretty_print=True,).decode('UTF-8'),
+              file=f)
+    return outfn
+
+def main():
+    test_fn = '/data/capri_test_data/VN/mrms_geomatch/2014/GRtoDPR.KABR.140321.334.V06A.DPR.NS.1_21.nc.gz.gpm.col.kml'
+    # read kml file
+    with open(test_fn) as f:
+        doc = parser.parse(f)
+
+    root = doc.getroot()
+    png_file = str(root.Folder.GroundOverlay.name)
+
+    base_name = str(png_file).split('.gpm.col.png')[0]
+#    outdir = '/tmp'
+    outdir = './'
+
+    gpm_col = png_file
+    upload_files = []
+    upload_files.append(write_kml(png_file, doc, outdir))
+    upload_files.append(write_kml(base_name + '.gpm.col_log.png', doc, outdir))
+    upload_files.append(write_kml(base_name + '.gpm.bw.png', doc, outdir))
+    upload_files.append(write_kml(base_name + '.gpm.bw_log.png', doc, outdir))
+
+    root.Folder.GroundOverlay.description = KML.description('MRMS Surface Rain Rate')
+    upload_files.append(write_kml(base_name + '.mrms.col.png', doc, outdir))
+    upload_files.append(write_kml(base_name + '.mrms.col_log.png', doc, outdir))
+    upload_files.append(write_kml(base_name + '.mrms.bw.png', doc, outdir))
+    upload_files.append(write_kml(base_name + '.mrms.bw_log.png', doc, outdir))
+
 def lambda_handler(event, context):
 
     for record in event['Records']:
@@ -54,57 +100,7 @@ def lambda_handler(event, context):
 
         print('processing file: ' + file)
 
-        binfile = vnlib.binaryFile('/tmp/'+ fn)
-        binfile.set_flip_flag(True)  # set to access data in image coordinates from ascending Lat
-        data = binfile.get_data()
-
-        colors = []
-        bw = []
-        ind = 0
-        for row in colormap.colormap.data:
-            if ind == 0:
-                entry = (float(row[0]) / 255.0, float(row[1]) / 255.0, float(row[2]) / 255.0, 0.0)
-                #            entry = (0.0,0.0,0.0,0.0)
-                colors.append(entry)
-                entry = (float(ind) / 255.0, float(ind) / 255.0, float(ind) / 255.0, 0.0)
-                bw.append(entry)
-            else:
-                entry = (float(row[0]) / 255.0, float(row[1]) / 255.0, float(row[2]) / 255.0, 1.0)
-                colors.append(entry)
-                entry = (float(ind) / 255.0, float(ind) / 255.0, float(ind) / 255.0, 1.0)
-                bw.append(entry)
-            ind = ind + 1
-
-        # color
-        #    cm = LinearSegmentedColormap.from_list('Colors', colors, N=256)
-        cm = ListedColormap(colors, N=256)
-        bm = ListedColormap(bw, N=256)
-        #    plt.imshow(np.random.random((100, 100))*60, cmap=plt.cm.BuPu_r)
-        # plt.imshow(np.random.random((100, 100)) * 60, cmap=cm)
-
-        # clamp values at 60
-        b = np.where(data > 60)
-        data[b] = 60
-
-        b = np.where(data > 0)
-        min = np.min(data[b])
-        b = np.where(data < min)
-        # mrms_data[b]=min_mrms
-        data[b] = -9999
-        print("max ", np.max(data))
-        print("min ", np.min(data))
-
-        log_data = np.copy(data)
-
-        a = np.where(log_data > 0)
-        log_data[a] = np.log10(log_data[a])
-
-        plt.imsave('/tmp/'+'log.png', log_data, cmap=cm, vmin=-1, vmax=np.log10(100.0))
-        plt.imsave('/tmp/'+'linear.png', data, cmap=cm, vmin=0.0, vmax=60.0)
-        plt.imsave('/tmp/'+'log_bw.png', log_data, cmap=bm, vmin=-1, vmax=np.log10(100.0))
-        plt.imsave('/tmp/'+'linear_bw.png', data, cmap=bm, vmin=0.0, vmax=60.0)
-
-        # list of all files for a given radar on a give day:
+      # list of all files for a given radar on a give day:
         # GRtoDPR.KABR.210106.38967.V06A.DPR.NS.2_0.nc.gz
         # GRtoDPR.KABR.210106.38967.V06A.DPR.NS.2_0.nc.gz.fp.bin
         # GRtoDPR.KABR.210106.38967.V06A.DPR.NS.2_0.nc.gz.gpm.bin
@@ -145,3 +141,28 @@ def lambda_handler(event, context):
         except botocore.exceptions.ClientError as e:
             print("Error uploading the s3 object " + e.response)
             exit(-1)
+
+
+# <?xml version="1.0" encoding="UTF-8"?>
+# <kml xmlns="http://www.opengis.net/kml/2.2">
+#   <Folder>
+#     <name>GPM Validation Network</name>
+#     <description></description>
+#     <GroundOverlay>
+#      <name>GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.gpm.bw.png</name>
+#       <description>GPM Near Surface Rain Rate</description>
+#       <Icon>
+#        <href>GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.gpm.bw.png</href>
+#       </Icon>
+#       <LatLonBox>
+#         <north>47.029609</north>
+#         <south>43.881988</south>
+#         <east>-96.170059</east>
+#         <west>-100.65614199999999</west>
+#       </LatLonBox>
+#     </GroundOverlay>
+#   </Folder>
+# </kml>
+
+if __name__ == '__main__':
+   main()

@@ -197,7 +197,7 @@ def main():
                         else:
                             print("file ",parquet_output_file," already exists, reprocessing...")
 
-                    outputJson = process_file(os.path.join(root,file), bright_band)
+                    have_mrms, outputJson = process_file(os.path.join(root,file), bright_band)
                     # no precip volumes were found, skip file
                     if len(outputJson) == 0:
                         print("found no precip in file " + file + " skipping...")
@@ -224,7 +224,8 @@ def main():
                                  "time": outputJson[0]["time"],"site_rainy_count": outputJson[0]["site_rainy_count"],
                                  "site_fp_count": outputJson[0]["site_fp_count"],
                                  "site_percent_rainy":outputJson[0]["site_percent_rainy"],
-                                 "meanBB":outputJson[0]["meanBB"]}
+                                 "meanBB":outputJson[0]["meanBB"],
+                                 "have_mrms":have_mrms}
                     os.makedirs(os.path.join(config['META_DIR']), exist_ok=True)
                     with open(os.path.join(config['META_DIR'],file+'.meta.json'), 'w') as json_file:
                         json.dump(metadata, json_file)

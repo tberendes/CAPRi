@@ -5,6 +5,7 @@
 #  Description: This lambda function processes a single VN file on S3 formatted in netCDF
 #               and parses out variables, writing output to parquet format for Athena.
 #               Metadata files (.json) are also created and written to a separate S3 bucket.
+#               An external "Bright Band" file is read as either a csv or pickled dictionary (.pcl).
 #
 #  Syntax: currently no input parameters
 #
@@ -75,7 +76,7 @@ def lambda_handler(event, context):
             print("Error reading the s3 object " + file)
             exit(-1)
 
-        outputJson = process_file('/tmp/'+ fn, bright_band)
+        have_mrms, outputJson = process_file('/tmp/'+ fn, bright_band)
 
         # no precip volumes were found, skip file
         if len(outputJson) == 0:
@@ -102,7 +103,7 @@ def lambda_handler(event, context):
                      "time": outputJson[0]["time"],"site_rainy_count": outputJson[0]["site_rainy_count"],
                      "site_fp_count": outputJson[0]["site_fp_count"],
                      "site_percent_rainy":outputJson[0]["site_percent_rainy"],
-                     "meanBB":outputJson[0]["meanBB"]}
+                     "meanBB":outputJson[0]["meanBB"],"have_mrms":have_mrms}
 
         with open('/tmp/'+fn+'.meta.json', 'w') as json_file:
             json.dump(metadata, json_file)
