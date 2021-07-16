@@ -22,7 +22,7 @@ import numpy as np
 from matplotlib import pyplot as plt, ticker
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap, LogNorm
 
-import vnlib
+from mrmslib import MRMSToGPM
 import colormap
 
 def plot_with_log(title, data, cm):
@@ -91,9 +91,15 @@ def main():
     # load mrms, gpm, and footprint .bin files int MRMSToGPM class variable MRMSMatch
     # assumes filename format used in the Java VN matchup program for MRMS data
     # and also assumes that the footprint and GPM images (.bin files) are in the same directory
-    MRMSMatch = vnlib.MRMSToGPM(mrms_filename)
+    MRMSMatch = MRMSToGPM(mrms_filename)
 
     MRMSMatch.set_flip_flag(True) # set to access data in image coordinates
+
+    # test subsetting capability
+    MRMSMatch.MRMS.crop_from_center(256,256)
+    MRMSMatch.GPM.crop_from_center(256,256)
+    MRMSMatch.GPMFootprint.crop_from_center(256,256)
+
     fp_data = MRMSMatch.GPMFootprint.get_data()
     mrms_data = MRMSMatch.MRMS.get_data()
     gpm_data = MRMSMatch.GPM.get_data()
@@ -101,6 +107,9 @@ def main():
     print('fp ', fp_data[0][0], ' gpm ', gpm_data[0][0], ' mrms ', mrms_data[0][0])
     (lat,lon) = MRMSMatch.MRMS.get_lat_lon(0,0)
     print('lat ', lat, ' lon ', lon)
+
+    # test new output function for .bin file
+    #MRMSMatch.MRMS.write("mrms_test.bin")
 
     # use fields from the filename to query database to get only matching site data
     #GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin
@@ -144,40 +153,56 @@ def main():
     #    plt.imshow(np.random.random((100, 100))*60, cmap=plt.cm.BuPu_r)
     #plt.imshow(np.random.random((100, 100)) * 60, cmap=cm)
 
-
-    # clamp values at 60
-    b = np.where(mrms_data > 60)
-    mrms_data[b]=60
-
-    b = np.where(mrms_data > 0)
-    min_mrms = np.min(mrms_data[b])
-    b = np.where(mrms_data < min_mrms)
-    #mrms_data[b]=min_mrms
-    mrms_data[b]=-9999
-    print ("max mrms", np.max(mrms_data))
-    print ("min mrms", np.min(mrms_data))
-
-    b = np.where(gpm_data > 60)
-    gpm_data[b]=60
-
-    # need to set up RGB values directly, not using colormaps so I can set missing to black
-#    missing = np.where(gpm_data < 0)
-    b = np.where(gpm_data > 0)
-    min_gpm = np.min(gpm_data[b])
-    b = np.where(gpm_data < min_gpm)
-    #gpm_data[b]=min_gpm
-    gpm_data[b]=-9999
-    print ("max gpm", np.max(gpm_data))
-    print ("min gpm", np.min(gpm_data))
-
+#     # clamp values at 60
+#     b = np.where(mrms_data > 60)
+#     mrms_data[b]=60
+#
+#     b = np.where(mrms_data > 0)
+#     min_mrms = np.min(mrms_data[b])
+#     b = np.where(mrms_data < min_mrms)
+#     #mrms_data[b]=min_mrms
+#     mrms_data[b]=-9999
+#     print ("max mrms", np.max(mrms_data))
+#     print ("min mrms", np.min(mrms_data))
+#
+#     b = np.where(gpm_data > 60)
+#     gpm_data[b]=60
+#
+#     # need to set up RGB values directly, not using colormaps so I can set missing to black
+# #    missing = np.where(gpm_data < 0)
+#     b = np.where(gpm_data > 0)
+#     min_gpm = np.min(gpm_data[b])
+#     b = np.where(gpm_data < min_gpm)
+#     #gpm_data[b]=min_gpm
+#     gpm_data[b]=-9999
+#     print ("max gpm", np.max(gpm_data))
+#     print ("min gpm", np.min(gpm_data))
+#
+#
+#     log_gpm = np.copy(gpm_data)
+#     log_mrms = np.copy(mrms_data)
+#
+#     a = np.where(log_gpm > 0)
+#     log_gpm[a] = np.log10(log_gpm[a])
+#     a = np.where(log_mrms > 0)
+#     log_mrms[a] = np.log10(log_mrms[a])
 
     log_gpm = np.copy(gpm_data)
+    for row in range(log_gpm.shape[0]):
+        for col in range(log_gpm.shape[1]):
+            if log_gpm[row][col]>0:
+                log_gpm[row][col] = np.log10(log_gpm[row][col])
+            else:
+                log_gpm[row][col] = -9999.0
     log_mrms = np.copy(mrms_data)
-
-    a = np.where(log_gpm > 0)
-    log_gpm[a] = np.log10(log_gpm[a])
-    a = np.where(log_mrms > 0)
-    log_mrms[a] = np.log10(log_mrms[a])
+    for row in range(log_mrms.shape[0]):
+        for col in range(log_mrms.shape[1]):
+            if log_mrms[row][col]>0:
+                log_mrms[row][col] = np.log10(log_mrms[row][col])
+            else:
+                log_mrms[row][col] = -9999.0
+#    log_mrms = np.where(mrms_data > 0, np.log10(mrms_data),mrms_data)
+#    log_gpm = np.where(gpm_data > 0, np.log10(gpm_data),gpm_data)
 
 #    plt.imsave('mrms_log.png', log_mrms, cmap=cm, vmin=0.01, vmax=np.log10(60.0))
 

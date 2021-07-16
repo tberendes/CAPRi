@@ -20,7 +20,9 @@
 # --Do all the necessary imports
 import os
 import datetime
-import vnlib
+from vnlib import VNQuery
+from mrmslib import MRMSToGPM
+
 
 def main():
 
@@ -37,7 +39,7 @@ def main():
     # load mrms, gpm, and footprint .bin files int MRMSToGPM class variable MRMSMatch
     # assumes filename format used in the Java VN matchup program for MRMS data
     # and also assumes that the footprint and GPM images (.bin files) are in the same directory
-    MRMSMatch = vnlib.MRMSToGPM(mrms_filename)
+    MRMSMatch = MRMSToGPM(mrms_filename)
     #MRMSMatch.set_flip_flag(True) #set this if you want to access data in image coordinates (lat ascending in y coords)
 
     fp_data = MRMSMatch.GPMFootprint.get_data()
@@ -70,7 +72,7 @@ def main():
 
     #    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-21 00:00:00"}
     # initialize query class to start a new query
-    query = vnlib.VNQuery()
+    query = VNQuery()
 
     # can call an API to get a list of column names defined in the Athena table
     res = query.get_columns()

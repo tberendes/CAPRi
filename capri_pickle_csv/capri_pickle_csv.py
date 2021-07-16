@@ -14,11 +14,39 @@ from urllib.parse import unquote_plus, urlparse, urljoin
 import pickle
 import boto3
 import botocore
-
-from extract_vn import read_alt_bb_file
+import csv
 
 s3 = boto3.resource(
     's3')
+
+def read_alt_bb_file(filename):
+    alt_bb_dict = {}
+    # check to see if .pcl is in filename, assume pickle file is passed as filename
+    if str(filename).endswith('.pcl'):
+        read_from_csv=False
+    else:
+        read_from_csv=True
+
+    if not read_from_csv:
+        print("reading pickled BB file " + filename)
+        f = open(filename, "rb")
+        alt_bb_dict = pickle.load(f)
+        f.close()
+    else:
+        # read csv (delimited with '|')
+        print("reading CSV BB file " + filename)
+        with open(filename) as csvfile:
+            readCSV = csv.reader(csvfile, delimiter='|')
+            for row in readCSV:
+                radar_id=row[0]
+                orbit = int(row[1])
+    #            height = 1000.0 * float(row[2]) # in meters
+                height = float(row[2]) # in km
+                if radar_id not in alt_bb_dict.keys():
+                    alt_bb_dict[radar_id] = {}
+                alt_bb_dict[radar_id][orbit] = height
+
+    return alt_bb_dict
 
 def load_bb_from_s3(bucket, key,fn):
     #print("load_bb_from_s3 file key " + key)

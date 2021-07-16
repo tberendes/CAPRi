@@ -6,6 +6,9 @@
       <sourceFolder url="file://$MODULE_DIR$/ingest_vn_data" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/read_vn" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/read_vn_db" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/util" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vn_to_aws" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vnlib" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.aws-sam" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
       <excludeFolder url="file://$MODULE_DIR$/venv_new" />

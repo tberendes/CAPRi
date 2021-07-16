@@ -3,6 +3,3 @@ json2parquet
 botocore
 netCDF4
 numpy
-lxml
-pykml
-matplotlib

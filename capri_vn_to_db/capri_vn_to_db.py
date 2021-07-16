@@ -16,11 +16,6 @@
 
 # --Do all the necessary imports
 
-import gzip
-import logging
-import sys
-from time import sleep
-import os
 from urllib.parse import unquote_plus
 
 import boto3 as boto3
