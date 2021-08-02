@@ -29,6 +29,18 @@ s3 = boto3.resource(
     's3')
 from extract_vn import read_alt_bb_file, process_file
 
+def s3_file_exists(s3_bucket, s3_key):
+    try:
+        # head_object will return exception if file does not already exist
+#        s3.head_object(Bucket=s3_bucket, Key=s3_key)
+        s3.Object(s3_bucket, s3_key).load()
+        print("file " + s3_key + " is already in S3 bucket " + s3_bucket )
+        exists = True
+    except:
+        print("file " + s3_key + " doesn't exist in S3 bucket " + s3_bucket + " ...")
+        exists = False
+    return exists
+
 def lambda_handler(event, context):
 
     for record in event['Records']:
@@ -45,15 +57,28 @@ def lambda_handler(event, context):
             "alt_bb_bucket": "capri-data",
             "alt_bb_file": "vn_mirror/BB/GPM_rain_event_bb_km.txt.pcl",
             "s3_bucket_out": "capri-vn-data",
+            "overwrite_s3": False,
         }
         out_dir = config["OUT_DIR"]
         bb_file = config["alt_bb_file"]
         bb_bucket = config["alt_bb_bucket"]
         meta_dir = config["META_DIR"]
         bucket_out = config["s3_bucket_out"]
+        overwrite_s3_flag = config["overwrite_s3"]
 
         bb_fn = bb_file.split('/')[-1]
         fn = file.split('/')[-1]
+
+        # check to see if output file exists, and decide to process based on overwrite_s3_flag
+        parquet_exists = s3_file_exists(bucket_out, out_dir + '/' + fn + ".parquet")
+
+        #print("junk file test, "+str(s3_file_exists(bucket_out, out_dir + '/' + "junk.txt")))
+        if parquet_exists:
+            if overwrite_s3_flag:
+                print("output parquet file already exists, overwriting file ", fn)
+            else:
+                print("output parquet file already exists, skipping file ", fn)
+                return
 
         # download s3 file to /tmp storage
         try:
