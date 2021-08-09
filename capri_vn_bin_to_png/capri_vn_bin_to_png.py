@@ -58,8 +58,8 @@ def lambda_handler(event, context):
         bucket = record['s3']['bucket']['name']
         file = unquote_plus(record['s3']['object']['key'])
         fn = file.split('/')[-1]
-        #print('file name '+file)
-        #print('basename '+fn)
+        print('file name '+file)
+        print('basename '+fn)
 
         # e.g. GRtoDPR.KABR.140321.334.V06A.DPR.NS.1_21.nc.gz.gpm.bin
         data_type = fn.split('.')[-2]
@@ -70,19 +70,26 @@ def lambda_handler(event, context):
             data_desc = 'GPM Near Surface Rain Rate'
         elif (data_type.upper()=='MRMS'):
             data_desc = 'MRMS Surface Rain Rate'
+        elif (data_type.upper() == 'MODEL'):
+            data_desc = 'DL Enhanced GPM Near Surface Rain Rate'
         else:
             skip_fp = True
 
+    #  https://s3.console.aws.amazon.com/s3/object/capri-model-data?region=us-east-1&prefix=checkpoint-2500/GRtoDPR.KABR.140321.334.V06A.DPR.NS.2_0.nc.gz.model.bin
         # eventually, plan on these being defined as environment variables
         config = {
             "IMG_DIR": "img",
             "BIN_DIR": "bin",
+            "DLR_DIR": "dlr",
             "s3_bucket_out": "capri-vn-data",
         }
-        img_dir = config["IMG_DIR"]
+        if (data_type.upper() == 'MODEL'):
+            img_dir = config["DLR_DIR"]+'/'+file.replace('/'+fn, '',1)
+        else:
+            img_dir = config["IMG_DIR"]
         bin_dir = config["BIN_DIR"]
         bucket_out = config["s3_bucket_out"]
-
+        print("img_dir "+img_dir)
         # download s3 file to /tmp storage
         try:
             s3.Bucket(bucket).download_file(file, '/tmp/'+ fn)
@@ -94,8 +101,9 @@ def lambda_handler(event, context):
 
         binfile = binaryFile('/tmp/'+ fn)
         # crop from edges to make 256 x 256 size image for DL experiments
-        binfile.crop_from_center(256,256)
-        binfile.write('/tmp/subset.bin')
+        if (data_type.upper() != 'MODEL'):
+            binfile.crop_from_center(256,256)
+            binfile.write('/tmp/subset.bin')
 
         if (skip_fp):
             # upload .bin image to S3 bucket
@@ -167,7 +175,8 @@ def lambda_handler(event, context):
             s3.Bucket(bucket_out).upload_file(bw_log_kml, img_dir+ '/'+ fn_base + ".bw_log.kml")
 
             # upload .bin image to S3 bucket
-            s3.Bucket(bucket_out).upload_file('/tmp/subset.bin', bin_dir+ '/'+ fn)
+            if (data_type.upper() != 'MODEL'):
+                s3.Bucket(bucket_out).upload_file('/tmp/subset.bin', bin_dir+ '/'+ fn)
 
         except botocore.exceptions.ClientError as e:
             print("Error uploading the s3 object " + e.response)

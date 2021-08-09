@@ -83,7 +83,9 @@ def main():
     #     sys.exit(-1)
 
     #testing
-    mrms_filename = '/data/capri_test_data/VN/mrms_geomatch/2020/GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin'
+    #mrms_filename = '/data/capri_test_data/VN/mrms_geomatch/2020/GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin'
+    #mrms_filename = '/data/capri_test_data/test_out/GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin'
+    mrms_filename = '/data/capri_test_data/VN/mrms_geomatch/2020/GRtoDPR.KLIX.200917.37245.V06A.DPR.NS.1_21.nc.gz.mrms.bin'
 
     parsed_by_dot=mrms_filename.split('.')
     site=parsed_by_dot[1]
@@ -95,10 +97,24 @@ def main():
 
     MRMSMatch.set_flip_flag(True) # set to access data in image coordinates
 
+    north, south, east, west = MRMSMatch.MRMS.get_lat_lon_box()  # get lat/lon bounds
+    print("Before crop: ")
+    print("north " + str(north))
+    print("south " + str(south))
+    print("east " + str(east))
+    print("west " + str(west))
+
     # test subsetting capability
     MRMSMatch.MRMS.crop_from_center(256,256)
     MRMSMatch.GPM.crop_from_center(256,256)
     MRMSMatch.GPMFootprint.crop_from_center(256,256)
+
+    north, south, east, west = MRMSMatch.MRMS.get_lat_lon_box()  # get lat/lon bounds
+    print("After crop: ")
+    print("north " + str(north))
+    print("south " + str(south))
+    print("east " + str(east))
+    print("west " + str(west))
 
     fp_data = MRMSMatch.GPMFootprint.get_data()
     mrms_data = MRMSMatch.MRMS.get_data()

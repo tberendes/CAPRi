@@ -75,6 +75,12 @@ class binaryFile:
         self.llLat = self.llLat + (y_start * self.llResolution)
         self.height = height
         self.width = width
+        # print("Cropped...")
+        # print("width " +str(self.width))
+        # print("height " +str(self.height))
+        # print("ll lat "+str(self.llLat))
+        # print("ll lon "+str(self.llLon))
+        # print("resolution " + str(self.llResolution))
         # not np array subsetting is exclusive of ending element (i.e. less than)
         self.data = self.data[y_start:y_start+height, x_start:x_start+width]
 
@@ -111,6 +117,11 @@ class binaryFile:
             self.llResolution = header[4]
             size = int(self.width * self.height)
             shape = (int(self.height), int(self.width))
+            # print("width " + str(self.width))
+            # print("height " + str(self.height))
+            # print("ll lat " + str(self.llLat))
+            # print("ll lon " + str(self.llLon))
+            # print("resolution " + str(self.llResolution))
 
             data = struct.unpack('>{0}f'.format(size), data_file.read(4 * size))
             self.data = np.asarray(data).reshape(shape)
