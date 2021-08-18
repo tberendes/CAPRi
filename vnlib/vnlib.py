@@ -34,15 +34,15 @@ class VNQuery:
     url_query = 'https://o381wx9rqh.execute-api.us-east-1.amazonaws.com/dev/'
     url_result = 'https://o381wx9rqh.execute-api.us-east-1.amazonaws.com/dev/result'
     url_columns = 'https://3gfy5bwy4b.execute-api.us-east-1.amazonaws.com/test'
-    url_columns_result = 'https://3gfy5bwy4b.execute-api.us-east-1.amazonaws.com/test/result/'
+#    url_columns_result = 'https://3gfy5bwy4b.execute-api.us-east-1.amazonaws.com/test/result'
     max_retry_count = 30000
     retry_interval = 2
 
     def __init__(self):
         self.params = {}
-        self.query_id=''
-        self.q_params={}
-        self.result_url=''
+        self.query_ids=[]
+        #self.q_params={}
+        self.result_urls=[]
         self.csv_filename=''
         self.result_downloaded = False
         self.temp_file_flag = False
@@ -59,11 +59,10 @@ class VNQuery:
     # add functions to override defaults
     def set_query_url(self,url):
         self.url_query = url
-    def set_result_url(self,url):
-        self.url_result = url
 
-    # convert str to float if it is a viable numeric value, otherwise do nothing (on exception)
-    def str_to_value(self, s):
+    # convert str to int or float if it is a viable numeric value, otherwise do nothing (on exception)
+    def str_to_value(self, st):
+        s = str(st)
         try:
             s=int(s)
         except ValueError:
@@ -123,14 +122,16 @@ class VNQuery:
         #        else:
         print('Successfully connected with server, submitted query ...')
 
-        print(response.text)
+        #print(response.text)
         #self.query_id = response.text.split('queryId=')[1].split('}')[0]
-        resp_json = json.loads(response.text)
+#        resp_json = json.loads(response.text)
+        #print(response.text.replace("\\","").strip("\""))
+        resp_json = json.loads(response.text.replace("\\","").strip("\""))
         #self.query_id = response.text.split('queryId:')[1].split('}')[0]
-        self.query_id = resp_json['queryId']
+        self.query_ids = resp_json['queryIds']
 
-        print(self.query_id)
-        self.q_params = {'qid': self.query_id}
+        #print(self.query_ids)
+        #self.q_params = {'qids': self.query_ids}
 
         return {'status': 'success', 'message': 'Query successfully submitted'}
 
@@ -149,6 +150,7 @@ class VNQuery:
                 if response.status_code != 425:  # 425 is returned from lambda if query is in progress
                     print(f'HTTP error occurred: {http_err}')
                     print(response.json())
+                    return response.json()
             except Exception as err:
                 print(f'Other error occurred: {err}')
             #        else:
@@ -209,37 +211,80 @@ class VNQuery:
 #             if retry_count > self.max_retry_count:
 #                 print('HTTP Error: Exceeded maximum retries')
 #                 return {'status': 'failed', 'message': 'HTTP Error: Exceeded maximum retries'}
-        r = self.result_loop(self.url_result, self.q_params)
 
-        if 'file_url' in r:
-            self.result_url = r['file_url']
-        else:
-            return r
-        print("Athena result URL: ", self.result_url)
+        # loop over all sub-queries
+        self.result_urls=[]
+        for qid in self.query_ids:
+            r = self.result_loop(self.url_result, {'qid':qid})
+            #r = self.result_loop(self.url_result, self.q_params)
+
+            if 'file_url' in r:
+                self.result_urls.append(r['file_url'])
+            else:
+                return r
+
+        #print("Athena result URLs: ", self.result_urls)
 
         return {'status': 'success', 'message': 'Successfully performed query'}
 
     def download_csv(self, **kwargs):
+        # loop over query_ids, need to combine individual csv files into one
         # file_name = self.result_url.split("/")[-1]
-        f = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
+        res = self.wait_for_query()
+        if res['status'].lower() == 'empty':
+            return {'status': 'empty', 'message': 'CSV empty results'}
+        if res['status'].lower() != 'success':
+            return {'status': 'failed', 'message': 'CSV download failed'}
+
+        # add loop over result_urls, use temp filenames
+        temp_fn = []
+        for result_url in self.result_urls:
+            ft = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
+            temp_fn.append(ft.name)
+            #print("downloading CSV file ", result_url, ' ...')
+            get_response = requests.get(result_url, stream=True)
+            #        with open(file_name, 'wb') as f:
+            for chunk in get_response.iter_content(chunk_size=1024):
+                if chunk:  # filter out keep-alive new chunks
+                    ft.write(chunk)
+            #print("temp fname ", ft.name)
+            ft.close()
+        #print("combining CSV files...")
+
+        # read individual result files and combine into a list of lines
+        # read input files line by line
+        lines=[]
+        tmpFileCnt = 0
+        for fn in temp_fn:
+            with open(fn) as f:
+                lines.append(list(f))
+            tmpFileCnt += 1
+
+        # now combine temporary csv files into one output file
+
+        # open temporary output file
+        f = tempfile.NamedTemporaryFile(mode='w', delete=False)
         self.csv_filename = f.name
         self.temp_file_flag = True
         for key, value in kwargs.items():
             if key == 'filename':
                 self.csv_filename = value
                 self.temp_file_flag = False
-                f = open(self.csv_filename, 'w+b')
-        res = self.wait_for_query()
-        if res['status'] != 'success':
-            return {'status': 'failed', 'message': 'CSV download failed'}
+                f = open(self.csv_filename, 'w')
 
-        print("downloading CSV file ", self.result_url, ' ...')
-        get_response = requests.get(self.result_url, stream=True)
-        #        with open(file_name, 'wb') as f:
-        for chunk in get_response.iter_content(chunk_size=1024):
-            if chunk:  # filter out keep-alive new chunks
-                f.write(chunk)
-        print("fname ", self.csv_filename)
+        # write individual csv files into single output file
+        # asssume all csv files are same number of lines, and lines are in same order
+        # this can only be guaranteed if the query is ordered by a unique ID.  This is
+        # currently not the case, so we will probably disable the multuple csv file returns
+        # unless a solution is found.  For now, we will support the logic for consolidating
+        # multiple CSV files in case it is implemented at some point
+        for lineInd in range(len(lines[0])):
+            line = str(lines[0][lineInd]).rstrip().replace("\"","")
+            for tmpInd in range(1,tmpFileCnt):
+                line = line + ',' + str(lines[tmpInd][lineInd]).rstrip().replace("\"","")
+            f.write(line+'\n')
+
+        #print("fname ", self.csv_filename)
         f.close()
         self.result_downloaded = True
 
@@ -249,7 +294,7 @@ class VNQuery:
         if os.path.exists(self.csv_filename):
             shutil.copy(self.csv_filename, filename)
         else:
-            print("Can not copy temporary file ", self.csv_filename, " to ", filename)
+            print("Cannot copy temporary file ", self.csv_filename, " to ", filename)
             return {'status': 'failed', 'message': 'Failed to save CSV results'}
         return {'status': 'success', 'message': 'Successfully saved CSV results'}
 
@@ -279,7 +324,7 @@ class VNQuery:
                 row_cnt = row_cnt + 1
         f.close()
 
-        print("read ", row_cnt, " records")
+        print("received ", row_cnt, " records")
 
         return {'status':'success', 'message':'Successfully retrieved CSV results', 'results':matchupDict}
 
@@ -527,23 +572,27 @@ class VNQuery:
         #        else:
         print('Successfully connected with server, submitted column query ...')
 
-        print(response.text)
+        #print(response.text)
+        resp_json = json.loads(response.text)
+        #print("json: ", resp_json)
         # #self.query_id = response.text.split('queryId=')[1].split('}')[0]
         # resp_json = json.loads(response.text)
         # #self.query_id = response.text.split('queryId:')[1].split('}')[0]
         # query_id = resp_json['queryId']
         # print(query_id)
         #q_params = 'qid='+ response.text
-        q_params = {'qid': response.text.strip('"')}
-        print('Waiting for columns...')
 
-        r = self.result_loop(self.url_columns_result, q_params)
+        #q_params = {'qid': response.text.strip('"')}
+        #q_params = {'qid': response.text.split('/')[-1].split('.')[0]}
+        #print('Waiting for columns...')
 
-        if 'file_url' in r:
-            result_url = r['file_url']
+        #r = self.result_loop(self.url_columns_result, q_params)
+
+        if 'file_url' in resp_json:
+            result_url = resp_json['file_url']
         else:
-            return r
-        print("Athena result URL: ", result_url)
+            return response
+        #print("Athena Column query result URL: ", result_url)
 
         # if 'data' in r:
         #     data = r['data']
@@ -557,7 +606,7 @@ class VNQuery:
         #temp_filename=f.name
         #temp_filename="temp_column.json"
 
-        print("downloading CSV column file ", result_url, ' ...')
+        #print("downloading CSV column file ", result_url, ' ...')
         get_response = requests.get(result_url, stream=True)
         with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as f:
             temp_filename = f.name

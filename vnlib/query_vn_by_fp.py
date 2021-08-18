@@ -34,7 +34,8 @@ def main():
     #     sys.exit(-1)
 
     #testing
-    mrms_filename = '/data/capri_test_data/VN/mrms_geomatch/2020/GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin'
+    #mrms_filename = '/data/capri_test_data/VN/mrms_geomatch/2020/GRtoDPR.KABR.200312.34295.V06A.DPR.NS.1_21.nc.gz.mrms.bin'
+    mrms_filename = '/home/dhis/test/GRtoDPR.KABR.200312.34295.V06A.DPR.NS.2_0.nc.gz.mrms.bin'
 
     # load mrms, gpm, and footprint .bin files int MRMSToGPM class variable MRMSMatch
     # assumes filename format used in the Java VN matchup program for MRMS data
@@ -100,6 +101,9 @@ def main():
     query.add_gpm_version_match(gpm_version)
     query.add_vn_version_match(vn_version)
 
+    # force to ignore cache for testing
+    #query.add_parameter('cache', 'false')
+
     # match only this GR site
     query.add_gr_site_match(site)
 
@@ -123,13 +127,16 @@ def main():
     # check 'status' entry for 'success' or 'failed'
     # this function loops until success or failure
     res = query.download_csv(filename="test_csv.csv")
+    if res['status'].lower() == 'empty':
+        print("Empty query, file ", mrms_filename, " is not found in the VN database")
+        exit(-1)
     if res['status'] != 'success':
         print("Download failed: ", res['message'])
         exit(-1)
 
     # download (if not already downloaded) and read CSV file and return dictionary with status and results
     result = query.get_csv()
-    if result['status'] != 'success':
+    if result['status'].lower() != 'success':
         print("Get results failed: ", result['message'])
         exit(-1)
 

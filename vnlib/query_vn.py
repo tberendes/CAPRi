@@ -97,6 +97,9 @@ def main():
     #query.add_difference_threshold_filter('topHeight', 'zero_deg_height', 'lt', 1)
     query.add_difference_threshold('bottomHeight', 'zero_deg_height', 'lt', -1)
 
+    # force to ignore cache for testing
+    #query.add_parameter('cache','false')
+
     #query.add_range_filter('zero_deg_height', 0.0, 2.0)
 
     # submit query to AWS
@@ -110,6 +113,9 @@ def main():
     # which is automatically deleted on exit of program
     # check 'status' entry for 'success' or 'failed'
     res = query.download_csv(filename="test_csv.csv")
+    if res['status'].lower() == 'empty':
+        print("Empty query, parameters: ", query.get_params_json())
+        exit(-1)
     if res['status'] != 'success':
         print("Download failed: ", res['message'])
         exit(-1)

@@ -17,15 +17,14 @@ import boto3
 import os 
 import time
 
-def create_partitions(year,month_range, day_range, qid_list, client, database, partitioned_table,unpartitioned_table, output_bucket):
+def create_partitions(year,month_range, qid_list, client, database, partitioned_table,unpartitioned_table, output_bucket):
     j = year
     i = month_range
     print(month_range)
-    print(day_range)
-    # month 1-6
+    # month 1-6 
     for month in month_range:
 #        partition_string = f" INSERT INTO {database}.{partitioned_table} ( \"bbheight\" , \"bbprox\" , \"bbstatus\", \"dpr_beam\",  \"dm\", \"gpm_ver\", \"gr_dm\", \"gr_dm_max\",  \"gr_dm_stddev\", \"gr_nw\", \"gr_nw_max\" , \"gr_nw_stddev\",\"gr_rc_rainrate\", \"gr_rc_rainrate_max\" , \"gr_rc_rainrate_stddev\", \"gr_rhohv\", \"gr_rr_rainrate\", \"gr_rr_rainrate_max\", \"gr_rr_rainrate_stddev\", \"gr_z\", \"gr_z_max\", \"gr_z_stddev\",\"gr_z_s2ku\", \"gr_zdr\", \"gr_beam\", \"gr_blockage\", \"gr_site\", \"nw\", \"preciprate\", \"precipratesurface\", \"surfpreciptotrate\", \"typeprecip\", \"vn_ver\", \"zfactorcorrected\", \"zfactormeasured\", \"bottomheight\", \"clutterstatus\", \"elev\", \"fp\", \"heightstormtop\", \"hid_1\", \"hid_10\", \"hid_11\", \"hid_12\", \"hid_13\", \"hid_14\", \"hid_15\", \"hid_2\", \"hid_3\", \"hid_4\", \"hid_5\", \"hid_6\", \"hid_7\", \"hid_8\", \"hid_9\", \"latitude\",\"longitude\", \"meanbb\", \"piafinal\", \"preciptotwatercont\", \"raynum\" , \"scannum\", \"site_elev\", \"site_fp_count\", \"site_percent_rainy\",\"site_rainy_count\", \"time\",\"topheight\", \"vn_filename\" ,\"zero_deg_height\",\"sensor\", \"scan\", \"year\",\"month\",\"day\") SELECT  bbheight, bbprox, bbstatus , dpr_beam , dm, gpm_ver, gr_dm , gr_dm_max, gr_dm_stddev, gr_nw, gr_nw_max, gr_nw_stddev, gr_rc_rainrate, gr_rc_rainrate_max, gr_rc_rainrate_stddev, gr_rhohv, gr_rr_rainrate, gr_rr_rainrate_max, gr_rr_rainrate_stddev, gr_z, gr_z_max, gr_z_stddev, gr_z_s2ku, gr_zdr, gr_beam, gr_blockage, gr_site, nw, preciprate, precipratesurface, surfpreciptotrate , typeprecip , vn_ver,zfactorcorrected , zfactormeasured , bottomheight , clutterstatus , elev , fp, heightstormtop, hid_1 , hid_10 , hid_11 , hid_12 , hid_13 , hid_14 , hid_15 , hid_2 , hid_3 , hid_4 , hid_5 , hid_6 , hid_7 , hid_8 , hid_9 , latitude, longitude , meanbb, piafinal, preciptotwatercont, raynum , scannum , site_elev, site_fp_count ,site_percent_rainy , site_rainy_count , time, topheight,vn_filename, zero_deg_height,sensor , scan , year ,month, day FROM {database}.{unpartitioned_table} WHERE year = {j} AND month = {month} "
-        partition_string = f" INSERT INTO {database}.{partitioned_table} ( \"bbheight\" , \"bbprox\" , \"bbstatus\", \"dpr_beam\",  \"dm\", \"gpm_ver\", \"gr_dm\", \"gr_dm_max\",  \"gr_dm_stddev\", \"gr_nw\", \"gr_nw_max\" , \"gr_nw_stddev\",\"gr_rc_rainrate\", \"gr_rc_rainrate_max\" , \"gr_rc_rainrate_stddev\", \"gr_rhohv\", \"gr_rr_rainrate\", \"gr_rr_rainrate_max\", \"gr_rr_rainrate_stddev\", \"gr_z\", \"gr_z_max\", \"gr_z_stddev\",\"gr_z_s2ku\", \"gr_zdr\", \"gr_beam\", \"gr_blockage\", \"gr_site\", \"mrmsprecip\", \"nw\", \"preciprate\", \"precipratesurface\", \"surfpreciptotrate\", \"typeprecip\", \"vn_ver\", \"zfactorcorrected\", \"zfactormeasured\", \"bottomheight\", \"clutterstatus\", \"elev\", \"fp\", \"heightstormtop\", \"hid_1\", \"hid_10\", \"hid_11\", \"hid_12\", \"hid_13\", \"hid_14\", \"hid_15\", \"hid_2\", \"hid_3\", \"hid_4\", \"hid_5\", \"hid_6\", \"hid_7\", \"hid_8\", \"hid_9\", \"latitude\",\"longitude\", \"meanbb\", \"piafinal\", \"preciptotwatercont\", \"raynum\" , \"scannum\", \"site_elev\", \"site_fp_count\", \"site_percent_rainy\",\"site_rainy_count\", \"time\",\"topheight\", \"vn_filename\" ,\"zero_deg_height\",\"sensor\", \"scan\", \"year\",\"month\",\"day\") SELECT  bbheight, bbprox, bbstatus , dpr_beam , dm, gpm_ver, gr_dm , gr_dm_max, gr_dm_stddev, gr_nw, gr_nw_max, gr_nw_stddev, gr_rc_rainrate, gr_rc_rainrate_max, gr_rc_rainrate_stddev, gr_rhohv, gr_rr_rainrate, gr_rr_rainrate_max, gr_rr_rainrate_stddev, gr_z, gr_z_max, gr_z_stddev, gr_z_s2ku, gr_zdr, gr_beam, gr_blockage, gr_site, mrmsprecip, nw, preciprate, precipratesurface, surfpreciptotrate , typeprecip , vn_ver,zfactorcorrected , zfactormeasured , bottomheight , clutterstatus , elev , fp, heightstormtop, hid_1 , hid_10 , hid_11 , hid_12 , hid_13 , hid_14 , hid_15 , hid_2 , hid_3 , hid_4 , hid_5 , hid_6 , hid_7 , hid_8 , hid_9 , latitude, longitude , meanbb, piafinal, preciptotwatercont, raynum , scannum , site_elev, site_fp_count ,site_percent_rainy , site_rainy_count , time, topheight,vn_filename, zero_deg_height,sensor , scan , year ,month, day FROM {database}.{unpartitioned_table} WHERE year = {j} AND month = {month} AND day >= {day_range[0]} and day < {day_range[1]} "
+        partition_string = f" INSERT INTO {database}.{partitioned_table} ( \"bbheight\" , \"bbprox\" , \"bbstatus\", \"dpr_beam\",  \"dm\", \"gpm_ver\", \"gr_dm\", \"gr_dm_max\",  \"gr_dm_stddev\", \"gr_nw\", \"gr_nw_max\" , \"gr_nw_stddev\",\"gr_rc_rainrate\", \"gr_rc_rainrate_max\" , \"gr_rc_rainrate_stddev\", \"gr_rhohv\", \"gr_rr_rainrate\", \"gr_rr_rainrate_max\", \"gr_rr_rainrate_stddev\", \"gr_z\", \"gr_z_max\", \"gr_z_stddev\",\"gr_z_s2ku\", \"gr_zdr\", \"gr_beam\", \"gr_blockage\", \"gr_site\", \"mrmsprecip\", \"nw\", \"preciprate\", \"precipratesurface\", \"surfpreciptotrate\", \"typeprecip\", \"vn_ver\", \"zfactorcorrected\", \"zfactormeasured\", \"bottomheight\", \"clutterstatus\", \"elev\", \"fp\", \"heightstormtop\", \"hid_1\", \"hid_10\", \"hid_11\", \"hid_12\", \"hid_13\", \"hid_14\", \"hid_15\", \"hid_2\", \"hid_3\", \"hid_4\", \"hid_5\", \"hid_6\", \"hid_7\", \"hid_8\", \"hid_9\", \"latitude\",\"longitude\", \"meanbb\", \"piafinal\", \"preciptotwatercont\", \"raynum\" , \"scannum\", \"site_elev\", \"site_fp_count\", \"site_percent_rainy\",\"site_rainy_count\", \"time\",\"topheight\", \"vn_filename\" ,\"zero_deg_height\",\"sensor\", \"scan\", \"year\",\"month\",\"day\") SELECT  bbheight, bbprox, bbstatus , dpr_beam , dm, gpm_ver, gr_dm , gr_dm_max, gr_dm_stddev, gr_nw, gr_nw_max, gr_nw_stddev, gr_rc_rainrate, gr_rc_rainrate_max, gr_rc_rainrate_stddev, gr_rhohv, gr_rr_rainrate, gr_rr_rainrate_max, gr_rr_rainrate_stddev, gr_z, gr_z_max, gr_z_stddev, gr_z_s2ku, gr_zdr, gr_beam, gr_blockage, gr_site, mrmsprecip, nw, preciprate, precipratesurface, surfpreciptotrate , typeprecip , vn_ver,zfactorcorrected , zfactormeasured , bottomheight , clutterstatus , elev , fp, heightstormtop, hid_1 , hid_10 , hid_11 , hid_12 , hid_13 , hid_14 , hid_15 , hid_2 , hid_3 , hid_4 , hid_5 , hid_6 , hid_7 , hid_8 , hid_9 , latitude, longitude , meanbb, piafinal, preciptotwatercont, raynum , scannum , site_elev, site_fp_count ,site_percent_rainy , site_rainy_count , time, topheight,vn_filename, zero_deg_height,sensor , scan , year ,month, day FROM {database}.{unpartitioned_table} WHERE year = {j} AND month = {month} "
         print(f"Query being executed for year = {year} and month = {month}\n")
         print(partition_string)
         print("********************************************************************")
@@ -66,40 +65,31 @@ def main():
     unpartitioned_table = "parquet"
     output_bucket = "aws-athena-query-results-capri-real-time"
 
-#    years = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021]
-    years = [2015, 2016, 2017, 2018, 2019, 2020, 2021]
-    #years = [2014]
+    #years = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021]
+    years = [2014]
 #    months = [list(range(1,7)), list(range(7,13))]
     #months = [list(range(1,3)),list(range(3,5)),list(range(5,7)),list(range(7,9)),list(range(9,11)),list(range(11,13))]
-    # do one month at a time due to limits on open partitions in Athena
-    # since we added all four sensors and all three scans this increased partitions over the limit
-    months = [[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[11],[12]]
-    #months = [[3],[4],[5],[6],[7],[8],[9],[10],[11],[12]]
-    #months = [[6]]
-    # use range type indices for days, i.e. day >= start and day < end
-    days = [[1,16],[16,32]]
+    months = [list(range(3,5))]
 
 #    months = [list(range(5,9)), list(range(9,13))]
 #    months = [list(range(1,5)), list(range(5,9)), list(range(9,13))]
     for year in years:
         for month_range in months:
-            for day_range in days:
-                qid_list = []
-                qids = create_partitions(year, month_range, day_range ,qid_list, client, database, partitioned_table,unpartitioned_table, output_bucket)
+            qid_list = []
+            qids = create_partitions(year, month_range ,qid_list, client, database, partitioned_table,unpartitioned_table, output_bucket)
 
-                print("The queries with following qids are running\n")
-                print(qids)
-                for qid in qids:
-                    print("checking for qid=", qid)
-                    query_state = ''
-                    while query_state != "SUCCEEDED":
-                        query_state = client.get_query_execution(QueryExecutionId=qid)['QueryExecution']['Status']['State']
-                        # query_state = query_status['State']
-                        if query_state in ["FAILED", "CANCELLED"]:
-                            print(f"Query {qid} failed, exiting...")
-                            break
-                        time.sleep(1)
-                    print(f"The query succeeded is qid = {qid} with status {query_state}")
+            print("The queries with following qids are running\n")
+            print(qids)
+            for qid in qids:
+                print("checking for qid=", qid)
+                query_state = ''
+                while query_state != "SUCCEEDED":
+                    query_state = client.get_query_execution(QueryExecutionId=qid)['QueryExecution']['Status']['State']
+                    # query_state = query_status['State']
+                    if query_state in ["FAILED", "CANCELLED"]:
+                        print(f"Run the query with {qid} manually from Athena interface")
+                        break
+                print(f"The query succeeded is qid = {qid} with status {query_state}")    
     return qids
 
 main()
