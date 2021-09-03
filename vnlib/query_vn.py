@@ -46,10 +46,18 @@ def main():
     columns = res['columns']
     print ("Athena column names: ",columns)
 
+#GR_Z_s2Ku vs. zFactorCorrected; Sensor: DPR; Scan: NS) from 05/01/2014-09/10/2020
+    query.set_time_range("2014-05-01 00:00:00", "2020-09-10 00:00:00")
+    query.set_columns("GR_Z_s2Ku,zFactorCorrected")
+    query.add_scan_match("NS")
+    query.add_sensor_match("DPR")
+    #query.add_parameter('cache', 'false')
+    query.set_beam_filling_thresh(100.0)
+    query.set_bbprox_above()
 
     # initialize query parameters
-    query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
-    query.set_columns("time,latitude,longitude,GR_Z,Dm,gr_site,vn_filename,raynum,scannum,elev,typePrecip,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
+    #query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
+    #query.set_columns("time,latitude,longitude,GR_Z,Dm,gr_site,vn_filename,raynum,scannum,elev,typePrecip,BBheight,meanBB,BBprox,GR_beam,DPR_beam,GR_blockage")
     # can add more columns
     #query.add_column('column_name')
 
@@ -81,7 +89,7 @@ def main():
     # implement the GR blockage parameter (if present) and the alternative BB based on Ruc 0 height soundings
     # as a fallback if DPR-based BB is missing.
 
-    query.set_beam_filling_thresh(100.0) # this was the default parameter in our old plots
+    #query.set_beam_filling_thresh(100.0) # this was the default parameter in our old plots
     #query.set_below_bb() # above and below BB are defined as above and below 750m of mean brightband
     #query.set_above_bb()
     #query.set_convective()
@@ -95,12 +103,16 @@ def main():
 
     # can use 'lt', 'lte', 'gt', 'gte', 'eq' for relation
     #query.add_difference_threshold_filter('topHeight', 'zero_deg_height', 'lt', 1)
-    query.add_difference_threshold('bottomHeight', 'zero_deg_height', 'lt', -1)
+    #query.add_difference_threshold('bottomHeight', 'zero_deg_height', 'lt', -1)
 
     # force to ignore cache for testing
     #query.add_parameter('cache','false')
 
     #query.add_range_filter('zero_deg_height', 0.0, 2.0)
+
+    # this is just to print out submitted json structure
+    #query.finalize_params()
+    #print(query.get_params_json())
 
     # submit query to AWS
     res = query.submit_query()
@@ -112,6 +124,7 @@ def main():
     # if optional filename is omitted, uses temporary file
     # which is automatically deleted on exit of program
     # check 'status' entry for 'success' or 'failed'
+    print("Saving csv file...")
     res = query.download_csv(filename="test_csv.csv")
     if res['status'].lower() == 'empty':
         print("Empty query, parameters: ", query.get_params_json())
@@ -119,6 +132,9 @@ def main():
     if res['status'] != 'success':
         print("Download failed: ", res['message'])
         exit(-1)
+
+    # exit if you only want to download result csv file
+    exit(0)
 
     # download (if not already downloaded) and read CSV file and return dictionary with status and results
     result = query.get_csv()

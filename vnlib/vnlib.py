@@ -330,7 +330,8 @@ class VNQuery:
 
     # add a single key,value pair as a filter parameter for query API
     def add_parameter(self, key, value):
-        self.params[key] = value
+        # make param lower case due to limitation in core API, need to rework the core to make it more general
+        self.params[key.lower()] = value
 
     # convenience functions for common filtering methods
     def set_columns(self, comma_list):
@@ -487,26 +488,26 @@ class VNQuery:
     # can pick only one of the following, last one called overrides
     # above and below BB are defined as above and below 750m of mean brightband
     def set_bbprox_above(self):
-        if self.bbprox > 0:
-            print("BBprox already specified, ignoring...")
-            return
+        # if self.bbprox > 0:
+        #     print("BBprox already specified, ignoring...")
+        #     return
         self.bbprox = 3
-        self.add_variable_range('BBprox',self.bbprox,self.bbprox)
-        #self.params['BBprox'] = 3
+#        self.add_variable_range('BBprox',self.bbprox,self.bbprox)
+        self.add_parameter('BBprox',self.bbprox)
     def set_bbprox_below(self):
-        if self.bbprox > 0:
-            print("BBprox already specified, ignoring...")
-            return
+        # if self.bbprox > 0:
+        #     print("bbprox already specified, ignoring...")
+        #     return
         self.bbprox = 1
-        self.add_variable_range('BBprox',self.bbprox,self.bbprox)
-        #self.params['BBprox'] = 1
+#        self.add_variable_range('BBprox',self.bbprox,self.bbprox)
+        self.add_parameter('BBprox',self.bbprox)
     def set_bbprox_within(self):
-        if self.bbprox > 0:
-            print("BBprox already specified, ignoring...")
-            return
+        # if self.bbprox > 0:
+        #     print("BBprox already specified, ignoring...")
+        #     return
         self.bbprox = 2
-        self.add_variable_range('BBprox',self.bbprox,self.bbprox)
-        #self.params['BBprox'] = 2
+#        self.add_variable_range('BBprox',self.bbprox,self.bbprox)
+        self.add_parameter('BBprox',self.bbprox)
 
     # can pick only one of the following, last one called overrides
     def set_precip_type_convective(self):
