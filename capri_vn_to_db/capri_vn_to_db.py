@@ -25,6 +25,8 @@ from botocore.exceptions import ClientError
 
 import json
 
+import os
+
 s3 = boto3.resource(
     's3')
 from extract_vn import read_alt_bb_file, process_file
@@ -51,6 +53,7 @@ def lambda_handler(event, context):
         print('basename '+fn)
 
         # eventually, plan on these being defined as environment variables
+        # set default values if environment variable are missing
         config = {
             "OUT_DIR": "parquet",
             "META_DIR": "metadata",
@@ -59,6 +62,40 @@ def lambda_handler(event, context):
             "s3_bucket_out": "capri-vn-data",
             "overwrite_s3": False,
         }
+        env_vars = os.environ
+        has_items = bool(env_vars)
+        if (has_items):
+            if "OUT_DIR" in env_vars:
+                print('using OUT_DIR='+env_vars["OUT_DIR"])
+                config["OUT_DIR"] = env_vars["OUT_DIR"]
+            else:
+                print('default OUT_DIR=' + config["OUT_DIR"])
+            if "META_DIR" in env_vars:
+                print('using META_DIR='+env_vars["META_DIR"])
+                config["META_DIR"] = env_vars["META_DIR"]
+            else:
+                print('default META_DIR=' + config["META_DIR"])
+            if "alt_bb_bucket" in env_vars:
+                print('using alt_bb_bucket='+env_vars["alt_bb_bucket"])
+                config["alt_bb_bucket"] = env_vars["alt_bb_bucket"]
+            else:
+                print('default alt_bb_bucket=' + config["alt_bb_bucket"])
+            if "alt_bb_file" in env_vars:
+                print('using alt_bb_file='+env_vars["alt_bb_file"])
+                config["alt_bb_file"] = env_vars["alt_bb_file"]
+            else:
+                print('default alt_bb_file=' + config["alt_bb_file"])
+            if "s3_bucket_out" in env_vars:
+                print('using s3_bucket_out='+env_vars["s3_bucket_out"])
+                config["s3_bucket_out"] = env_vars["s3_bucket_out"]
+            else:
+                print('default s3_bucket_out=' + config["s3_bucket_out"])
+            if "overwrite_s3" in env_vars:
+                print('using overwrite_s3='+env_vars["overwrite_s3"])
+                config["overwrite_s3"] = env_vars["overwrite_s3"]
+            else:
+                print('default overwrite_s3=' + config["overwrite_s3"])
+
         out_dir = config["OUT_DIR"]
         bb_file = config["alt_bb_file"]
         bb_bucket = config["alt_bb_bucket"]

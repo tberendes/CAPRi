@@ -157,11 +157,31 @@ def process_file(filename, alt_bright_band):
             with NetCDFFile('dummy', mode='r', memory=gz.read()) as nc:
                 #print(nc.variables)
                 #nc = NetCDFFile(filename)
+
+                GPM_VERSION = getattr(nc, 'DPR_Version')
+
+                # check for ITE and V, and extract numeric version
+                if GPM_VERSION.find('ITE')>=0:
+                    versionNumber=int(GPM_VERSION.split('ITE')[1])
+                    if versionNumber < 600:
+                        isVersion7 = False
+                    else:
+                        isVersion7 = True
+                else: #GPM_VERSION.find('V')>=0:
+                    versionNumber = int(GPM_VERSION[1:3])
+                    if versionNumber <= 6:
+                        isVersion7 = False
+                    else:
+                        isVersion7 = True
+
                 addlist=[]
                 have_mrms = False
                 if filename.find('DPRGMI')>=0:
                     data_is_dprgmi = True
-                    addlist=['_NS','_MS']
+                    if isVersion7:
+                        addlist=['_NS','_FS']
+                    else:
+                        addlist = ['_NS', '_MS']
                 else:
                     data_is_dprgmi = False
                     addlist=['']
@@ -190,6 +210,7 @@ def process_file(filename, alt_bright_band):
                             varDict_elev_fpdim['ZFactorCorrected'] = np.empty_like(varDict_elev_fpdim['GR_Z']) # elevAngle 	fpdim
                             for el in range(eld):
                                 for fp in range(fpd):
+                                    # using Ku version, Ku [0], Ka[1]
                                     varDict_elev_fpdim['ZFactorCorrected'][el][fp] =  float(ma.getdata(nc.variables['correctedReflectFactor'+add][el])[fp][0])
                     else:
                         varDict_elev_fpdim['ZFactorMeasured'] = nc.variables['ZFactorMeasured'][:]  # elevAngle 	fpdim
@@ -209,7 +230,10 @@ def process_file(filename, alt_bright_band):
                     varDict_elev_fpdim['GR_Dm_StdDev'] =  nc.variables['GR_Dm_StdDev'+add][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Dm_Max'] = nc.variables['GR_Dm_Max'+add][:]   # elevAngle 	fpdim
                     if data_is_dprgmi:
-                        varDict_elev_fpdim['Dm'] = nc.variables['precipTotPSDparamHigh'+add][:]   # elevAngle 	fpdim
+                        if isVersion7:
+                            varDict_elev_fpdim['Dm'] = nc.variables['precipTotDm' + add][:]  # elevAngle 	fpdim
+                        else:
+                            varDict_elev_fpdim['Dm'] = nc.variables['precipTotPSDparamHigh'+add][:]   # elevAngle 	fpdim
                     else:
                         varDict_elev_fpdim['Dm'] = nc.variables['Dm'][:]  # elevAngle 	fpdim
 
@@ -218,10 +242,24 @@ def process_file(filename, alt_bright_band):
                     varDict_elev_fpdim['GR_Nw'] =  nc.variables['GR_Nw'+add][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Nw_StdDev'] = nc.variables['GR_Nw_StdDev'+add][:]   # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Nw_Max'] = nc.variables['GR_Nw_Max'+add][:]   # elevAngle 	fpdim
+
+                    if isVersion7:
+                        varDict_elev_fpdim['GR_liquidWaterContent'] = nc.variables['GR_liquidWaterContent'+add][:]   # elevAngle 	fpdim
+                        varDict_elev_fpdim['GR_frozenWaterContent'] = nc.variables['GR_frozenWaterContent'+add][:]   # elevAngle 	fpdim
+                    else:
+                        varDict_elev_fpdim['GR_liquidWaterContent'] = np.empty_like(varDict_elev_fpdim['GR_Nw'])  # elevAngle 	fpdim
+                        varDict_elev_fpdim['GR_liquidWaterContent'][:] =  -9999.0
+                        varDict_elev_fpdim['GR_frozenWaterContent'] = np.empty_like(varDict_elev_fpdim['GR_Nw'])   # elevAngle 	fpdim
+                        varDict_elev_fpdim['GR_frozenWaterContent'][:] =  -9999.0
+
                     if data_is_dprgmi:
                         #varDict_elev_fpdim['Nw'] = nc.variables['precipTotPSDparamLow' + add][:,:,0:0]  # elevAngle 	fpdim
-                        eld = nc.variables['precipTotPSDparamLow' + add].shape[0]
-                        fpd = nc.variables['precipTotPSDparamLow' + add].shape[1]
+                        if isVersion7:
+                            eld = nc.variables['precipTotLogNw' + add].shape[0]
+                            fpd = nc.variables['precipTotLogNw' + add].shape[1]
+                        else:
+                            eld = nc.variables['precipTotPSDparamLow' + add].shape[0]
+                            fpd = nc.variables['precipTotPSDparamLow' + add].shape[1]
                         nPSDlo = nc.variables['precipTotPSDparamLow' + add].shape[2]
                         varDict_elev_fpdim['Nw'] = np.empty_like(varDict_elev_fpdim['GR_Nw']) # elevAngle 	fpdim
 
@@ -234,7 +272,10 @@ def process_file(filename, alt_bright_band):
                         for el in range(eld):
                             for fp in range(fpd):
                                 #varDict_elev_fpdim['Nw'][el][fp] =  float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
-                                val = float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
+                                if isVersion7:
+                                    val = float(ma.getdata(nc.variables['precipTotLogNw' + add][el])[fp])
+                                else:
+                                    val = float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
                                 # scales log10(Nw) values from 1/m^4 to 1/m^3
                                 if val > 0:
                                     varDict_elev_fpdim['Nw'][el][fp] = val - 3.0
@@ -288,6 +329,7 @@ def process_file(filename, alt_bright_band):
                             nkukad = shape[1]
                             varDict_fpdim['piaFinal'] = np.empty_like(nc.variables['DPRlatitude'+add]) # elevAngle 	fpdim
                             for fp in range(fpd):
+                                # using Ku version, Ku [0], Ka[1]
                                 varDict_fpdim['piaFinal'][fp] =  float(ma.getdata(nc.variables['pia'+add])[fp][0])
 
                         #varDict_elev_fpdim['ZFactorMeasured'] = np.empty_like(varDict_elev_fpdim['GR_Z'])
@@ -391,7 +433,7 @@ def process_file(filename, alt_bright_band):
                     closestTime = closestTime.split(' ')[1]
 
                     #print('attribs ', nc.ncattrs())
-                    GPM_VERSION = getattr(nc, 'DPR_Version')
+#                    GPM_VERSION = getattr(nc, 'DPR_Version')
                     if data_is_dprgmi:
                         SCAN_TYPE = add.strip('_')
                     else:

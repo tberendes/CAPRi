@@ -30,6 +30,8 @@ from botocore.exceptions import ClientError
 from colormap import colormap
 from mrmslib import binaryFile
 
+import os
+
 s3 = boto3.resource(
     's3')
 
@@ -77,14 +79,41 @@ def lambda_handler(event, context):
 
     #  https://s3.console.aws.amazon.com/s3/object/capri-model-data?region=us-east-1&prefix=checkpoint-2500/GRtoDPR.KABR.140321.334.V06A.DPR.NS.2_0.nc.gz.model.bin
         # eventually, plan on these being defined as environment variables
+        # set defaults in case environment variables aren't set
         config = {
             "IMG_DIR": "img",
             "BIN_DIR": "bin",
             "DLR_DIR": "dlr",
-            "s3_bucket_out": "capri-vn-data",
+            "s3_bucket_out": "capri-vn-data"
         }
+        env_vars = os.environ
+        has_items = bool(env_vars)
+        if (has_items):
+            if "IMG_DIR" in env_vars:
+                print('using IMG_DIR='+env_vars["IMG_DIR"])
+                config["IMG_DIR"] = env_vars["IMG_DIR"]
+            else:
+                print('default IMG_DIR=' + config["IMG_DIR"])
+            if "BIN_DIR" in env_vars:
+                print('using BIN_DIR='+env_vars["BIN_DIR"])
+                config["BIN_DIR"] = env_vars["BIN_DIR"]
+            else:
+                print('default BIN_DIR=' + config["BIN_DIR"])
+            if "DLR_DIR" in env_vars:
+                print('using DLR_DIR='+env_vars["DLR_DIR"])
+                config["DLR_DIR"] = env_vars["DLR_DIR"]
+            else:
+                print('default DLR_DIR=' + config["DLR_DIR"])
+            if "s3_bucket_out" in env_vars:
+                print('using s3_bucket_out='+env_vars["s3_bucket_out"])
+                config["s3_bucket_out"] = env_vars["s3_bucket_out"]
+            else:
+                print('default s3_bucket_out=' + config["s3_bucket_out"])
+
         if (data_type.upper() == 'MODEL'):
-            img_dir = config["DLR_DIR"]+'/'+file.replace('/'+fn, '',1)
+            # originally used subdirectories under dlr for checkpoints, now just use base dlr directory
+            #img_dir = config["DLR_DIR"]+'/'+file.replace('/'+fn, '',1)
+            img_dir = config["DLR_DIR"]
         else:
             img_dir = config["IMG_DIR"]
         bin_dir = config["BIN_DIR"]

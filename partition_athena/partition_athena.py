@@ -64,8 +64,9 @@ def main():
 #    unpartitioned_table = "parquet_02_21"
     partitioned_table = "vn_partition"
     unpartitioned_table = "parquet"
-    output_bucket = "aws-athena-query-results-capri-real-time"
-
+    output_bucket = "aws-athena-query-results-partition-scratch"
+    # change to a scratch bucket and delete the intermediate queries
+    #output_bucket = "aws-athena-query-results-capri-real-time"
 #    years = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021]
     years = [2015, 2016, 2017, 2018, 2019, 2020, 2021]
     #years = [2014]
