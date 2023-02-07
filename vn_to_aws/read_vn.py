@@ -30,7 +30,7 @@ import json
 
 #s3 = boto3.resource(
 #    's3')
-from extract_vn import read_alt_bb_file, process_file
+from extract_vn import process_file
 
 session = boto3.Session(profile_name='CAPRI')
 # Any clients created from this session will use credentials
@@ -128,7 +128,6 @@ def main():
         "VN_DIR": "/data/capri_test_data/VN/wget/GPM/2BDPRGMI/V06A/1_3",
         "OUT_DIR": "/data/capri_test_data/VN_parquet_dprgmi",
         "META_DIR": "/data/capri_test_data/meta_dprgmi",
-        "alt_bb_file": "/data/capri_test_data/BB/GPM_rain_event_bb_km.txt",
         "s3_bucket": "capri-data",
         "s3_parquet_dir": "parquet_dprgmi",
         "s3_img_dir": "img",
@@ -160,7 +159,6 @@ def main():
         config['VN_DIR'] = sys.argv[2]
 
     #client = boto3.client('s3')
-    bright_band = read_alt_bb_file(config['alt_bb_file'])
 
     # TODO: need to handle missing alt_bb file, skip if not specified
 
@@ -197,7 +195,7 @@ def main():
                         else:
                             print("file ",parquet_output_file," already exists, reprocessing...")
 
-                    have_mrms, outputJson = process_file(os.path.join(root,file), bright_band)
+                    have_mrms, outputJson = process_file(os.path.join(root,file))
                     # no precip volumes were found, skip file
                     if len(outputJson) == 0:
                         print("found no precip in file " + file + " skipping...")

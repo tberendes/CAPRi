@@ -22,20 +22,22 @@ import json2parquet
 
 import json
 
-from extract_vn import read_alt_bb_file, process_file
+from extract_vn import process_file
 
 def main():
 
-    if len(sys.argv) < 6:
-        print("Usage: python vn_to_parquet_partition.py <vn_base_dir> <output_base_dir> <BB_filename> <start YYMMDD> <end YYMMDD>")
+    if len(sys.argv) < 5:
+ #       print("Usage: python vn_to_parquet_partition.py <vn_base_dir> <output_base_dir> <BB_filename> <start YYMMDD> <end YYMMDD>")
+        print("Usage: python vn_to_parquet_partition.py <vn_base_dir> <output_base_dir> <start YYMMDD> <end YYMMDD>")
         print("Note: start and end dates are inclusive")
         sys.exit()
 
     VN_DIR = sys.argv[1]
     OUT_DIR = sys.argv[2]
-    alt_bb_file = sys.argv[3]
-    START_DATE = int(sys.argv[4])
-    END_DATE = int(sys.argv[5])
+    # alt_bb is now freezing_level_height variable in matchup files
+#    alt_bb_file = sys.argv[3]
+    START_DATE = int(sys.argv[3])
+    END_DATE = int(sys.argv[4])
 
     #alt_bb_file = 'GPM_rain_event_bb_km.txt'
 
@@ -49,12 +51,6 @@ def main():
     # }
     #"site_pattern": "K",
     #config_file = "run_dprgmi.json"
-
-    # assume BB file is under VN_DIR/BB using standard name
-    #bright_band = read_alt_bb_file(VN_DIR+'/BB'+alt_bb_file)
-    bright_band = read_alt_bb_file(alt_bb_file)
-
-    # TODO: need to handle missing alt_bb file, skip if not specified
 
     # support single file processing, if VN_FILE is defined, only process single file
     #config['VN_FILE'] = 'filename'
@@ -89,7 +85,7 @@ def main():
 
             if file.endswith('.nc.gz'):
                 print('processing file: ' + file)
-                have_mrms, outputJson = process_file(os.path.join(root,file), bright_band)
+                have_mrms, outputJson = process_file(os.path.join(root,file))
 
                 # no precip volumes were found, skip file
                 if len(outputJson) == 0:
@@ -99,7 +95,7 @@ def main():
                 if 'error' in outputJson:
                     print('skipping file ', file, ' due to processing error...')
                     continue
-                print (outputJson)
+                #print (outputJson)
 
                 # configure output file path
                 # need to remove partitioned fields from the final parquet file before writing
@@ -108,10 +104,13 @@ def main():
 
                 # set up fixed partitions for this file
                 out_path = OUT_DIR
+                out_path_json = OUT_DIR + '/' + 'json'
                 # use first record to set output path for fixed partitions
                 for partition in fixed_partitions:
                     out_path=out_path+'/'+partition.lower()+'='+str(outputJson[0][partition])
+                    out_path_json=out_path_json+'/'+partition.lower()+'='+str(outputJson[0][partition])
 
+                # need to remove partitioned fields from the final parquet file before writing
                 # process all records in the file, removing partitions and adding to new output list
                 outputList = []
                 for record in outputJson:
@@ -124,8 +123,14 @@ def main():
                 parquet_data = json2parquet.ingest_data(outputList)
                 os.makedirs(os.path.join(out_path), exist_ok=True)
 
-                # need to remove partitioned fields from the final parquet file before writing
+                # write the final parquet file
                 json2parquet.write_parquet(parquet_data, parquet_output_file, compression='snappy')
+
+                # save json files for testing
+                #json_output_file = os.path.join(out_path_json+'/'+file+'.json')
+                #os.makedirs(os.path.join(out_path_json), exist_ok=True)
+                #with open(json_output_file, 'w') as json_file:
+                #    json.dump(outputList, json_file)
 
                 #sys.exit()
 
