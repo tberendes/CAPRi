@@ -64,16 +64,29 @@ def compute_BB_prox(meanBB, top, botm):
         if botm <= (meanBB+bbwidth) and top >= (meanBB-bbwidth):
             htcat = 2  # within BB
     return htcat
-       # num_in_BB_Cat = LONARR(4)
-       # idxabv = WHERE( botm GT (meanbb+bbwidth), countabv )
-       # num_in_BB_Cat[3] = countabv
-       # IF countabv GT 0 THEN bbProx[idxabv] = 3
-       # idxblo = WHERE( ( top GT 0.0 ) AND ( top LT (meanbb-bbwidth) ), countblo )
-       # num_in_BB_Cat[1] = countblo
-       # IF countblo GT 0 THEN bbProx[idxblo] = 1
-       # idxin = WHERE( (botm LE (meanbb+bbwidth)) AND (top GE (meanbb-bbwidth)), countin )
-       # num_in_BB_Cat[2] = countin
-       # IF countin GT 0 THEN bbProx[idxin] = 2
+def compute_liquid_hid_flag(bottom_height, freezing_level_height, gr_hid):
+    # Instead of simply using the bright band or freezing level height to partition the VN data
+    # going into Athena, here’s some pseudo-code that uses the HID:
+    # Initialize 2D flag with fpdim, elev (i.e., a matched volume)
+    # Make sure matched volume is below freezing level height
+    # Flag matched volume if it only contains liquid HID types (DZ, RA, BD)
+
+    #                liquid_hid_flag=intarr(fpdim,elev)*0.0 ;initialize 2-D flag to indicate hydrometeor type as liquid (1) or non-liquid (0)
+    # For i=0, fpdim-1 do $
+    # if ( bottomHeight[i] LT (freezing_level[i]-1000 meters) ) do begin ;forget if heights are meters or kilometers
+    # rind =where( total(GR_HID [i,*,0]+GR_HID[i,*,3:9]+GR_HID[I,*,11],  0) EQ 0, rcount) ;sum rain/dz/bd hid bins
+    # if ( rcount gt 0) liquid_hid_flag[fpdim,elev]=1
+    # endif
+    liquid_hid_flag = False
+#    if (freezing_level_height<0 or bottom_height <0):
+#        liquid_hid_flag = False
+    if (freezing_level_height >= 0 and bottom_height >= 0 and bottom_height < (freezing_level_height-1000 )):
+            # sum hid counts that are not liquid (including missing)
+            cnt = int(gr_hid[0])+int(gr_hid[3]) +int(gr_hid[4]) +int(gr_hid[5]) +int(gr_hid[6]) +int(gr_hid[7]) +int(gr_hid[8]) +int(gr_hid[9]) +int(gr_hid[11])
+            if cnt > 0:
+                liquid_hid_flag = True
+
+    return liquid_hid_flag
 
 def process_file(filename):
     # DPR_to_athena_variables= {
@@ -168,14 +181,11 @@ def process_file(filename):
                     varDict_elev_fpdim['GR_Z_StdDev'] = nc.variables['GR_Z_StdDev'+add][:] # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Z_Max'] = nc.variables['GR_Z_Max'+add][:]  # elevAngle 	fpdim
                     if data_is_dprgmi:
-                        #varDict_elev_fpdim['ZFactorMeasured'] = np.empty_like(varDict_elev_fpdim['GR_Z'])
-                        #varDict_elev_fpdim['ZFactorMeasured'][:] = -9999.0
                         #varDict_elev_fpdim['ZFactorCorrected'] = float(ma.getdata(nc.variables['GR_blockage' + add][elev])[fp])
                         shape = nc.variables['correctedReflectFactor'+add].shape
                         eld = shape[0]
                         fpd = shape[1]
                         if len(shape) == 2:
-                            #varDict_elev_fpdim['ZFactorCorrected'] = nc.variables['correctedReflectFactor'+add][:]  # elevAngle 	fpdim
                             varDict_elev_fpdim['correctedReflectFactor'] = nc.variables['correctedReflectFactor'+add][:]  # elevAngle 	fpdim
                         else:  # MS swath has extra dimension, use only 1st dimension (ku) value
                             #nkukad = nc.variables['correctedReflectFactor'+add].shape[2]
@@ -191,6 +201,10 @@ def process_file(filename):
                             varDict_elev_fpdim['ZFactorFinal'] = nc.variables['ZFactorFinal'][:]  # elevAngle 	fpdim
                         else:
                             varDict_elev_fpdim['ZFactorCorrected'] =  nc.variables['ZFactorCorrected'][:] # elevAngle 	fpdim
+                    if data_is_dprgmi:
+                        varDict_elev_fpdim['precipTotRate'] = nc.variables['precipTotRate' + add][:]  # elevAngle 	fpdim
+                    else:
+                        varDict_elev_fpdim['PrecipRate'] = nc.variables['PrecipRate'][:]   # elevAngle 	fpdim
 
                     varDict_elev_fpdim['GR_RC_rainrate'] = nc.variables['GR_RC_rainrate'+add][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_RC_rainrate_StdDev'] = nc.variables['GR_RC_rainrate_StdDev'+add][:]   # elevAngle 	fpdim
@@ -198,21 +212,21 @@ def process_file(filename):
                     varDict_elev_fpdim['GR_RR_rainrate'] = nc.variables['GR_RR_rainrate'+add][:]   # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_RR_rainrate_StdDev'] =  nc.variables['GR_RR_rainrate_StdDev'+add][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_RR_rainrate_Max'] = nc.variables['GR_RR_rainrate_Max'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_RP_rainrate'] = nc.variables['GR_RP_rainrate'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_RP_rainrate_StdDev'] =  nc.variables['GR_RP_rainrate_StdDev'+add][:]  # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_RP_rainrate_Max'] = nc.variables['GR_RP_rainrate_Max'+add][:]   # elevAngle 	fpdim
 
-                    if data_is_dprgmi:
-                        #varDict_elev_fpdim['PrecipRate'] = nc.variables['precipTotRate' + add][:]  # elevAngle 	fpdim
-                        varDict_elev_fpdim['precipTotRate'] = nc.variables['precipTotRate' + add][:]  # elevAngle 	fpdim
-                    else:
-                        varDict_elev_fpdim['PrecipRate'] = nc.variables['PrecipRate'][:]   # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Dm'] = nc.variables['GR_Dm'+add][:]   # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Dm_StdDev'] =  nc.variables['GR_Dm_StdDev'+add][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Dm_Max'] = nc.variables['GR_Dm_Max'+add][:]   # elevAngle 	fpdim
+
+                    varDict_elev_fpdim['GR_sigmaDm'] = nc.variables['GR_sigmaDm'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_sigmaDm_StdDev'] =  nc.variables['GR_sigmaDm_StdDev'+add][:]  # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_sigmaDm_Max'] = nc.variables['GR_sigmaDm_Max'+add][:]   # elevAngle 	fpdim
                     if data_is_dprgmi:
                         if isVersion7:
-                            #varDict_elev_fpdim['Dm'] = nc.variables['precipTotDm' + add][:]  # elevAngle 	fpdim
                             varDict_elev_fpdim['precipTotDm'] = nc.variables['precipTotDm' + add][:]  # elevAngle 	fpdim
                         else:
-                            #varDict_elev_fpdim['Dm'] = nc.variables['precipTotPSDparamHigh'+add][:]   # elevAngle 	fpdim
                             varDict_elev_fpdim['precipTotPSDparamHigh'] = nc.variables['precipTotPSDparamHigh'+add][:]   # elevAngle 	fpdim
                     else:
                         varDict_elev_fpdim['Dm'] = nc.variables['Dm'][:]  # elevAngle 	fpdim
@@ -223,13 +237,13 @@ def process_file(filename):
                     varDict_elev_fpdim['GR_Nw_StdDev'] = nc.variables['GR_Nw_StdDev'+add][:]   # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Nw_Max'] = nc.variables['GR_Nw_Max'+add][:]   # elevAngle 	fpdim
 
-                    if isVersion7:
-                        varDict_elev_fpdim['GR_liquidWaterContent'] = nc.variables['GR_liquidWaterContent'+add][:]   # elevAngle 	fpdim
-                        varDict_elev_fpdim['GR_liquidWaterContent_StdDev'] = nc.variables['GR_liquidWaterContent_StdDev'+add][:]   # elevAngle 	fpdim
-                        varDict_elev_fpdim['GR_liquidWaterContent_Max'] = nc.variables['GR_liquidWaterContent_Max'+add][:]   # elevAngle 	fpdim
-                        varDict_elev_fpdim['GR_frozenWaterContent'] = nc.variables['GR_frozenWaterContent'+add][:]   # elevAngle 	fpdim
-                        varDict_elev_fpdim['GR_frozenWaterContent_StdDev'] = nc.variables['GR_frozenWaterContent_StdDev'+add][:]   # elevAngle 	fpdim
-                        varDict_elev_fpdim['GR_frozenWaterContent_Max'] = nc.variables['GR_frozenWaterContent_Max'+add][:]   # elevAngle 	fpdim
+                    #if isVersion7:
+                    varDict_elev_fpdim['GR_liquidWaterContent'] = nc.variables['GR_liquidWaterContent'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_liquidWaterContent_StdDev'] = nc.variables['GR_liquidWaterContent_StdDev'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_liquidWaterContent_Max'] = nc.variables['GR_liquidWaterContent_Max'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_frozenWaterContent'] = nc.variables['GR_frozenWaterContent'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_frozenWaterContent_StdDev'] = nc.variables['GR_frozenWaterContent_StdDev'+add][:]   # elevAngle 	fpdim
+                    varDict_elev_fpdim['GR_frozenWaterContent_Max'] = nc.variables['GR_frozenWaterContent_Max'+add][:]   # elevAngle 	fpdim
                     # else:
                     #     varDict_elev_fpdim['GR_liquidWaterContent'] = np.empty_like(varDict_elev_fpdim['GR_Nw'])  # elevAngle 	fpdim
                     #     varDict_elev_fpdim['GR_liquidWaterContent'][:] =  -9999.0
@@ -250,10 +264,13 @@ def process_file(filename):
                             eld = nc.variables['precipTotLogNw' + add].shape[0]
                             fpd = nc.variables['precipTotLogNw' + add].shape[1]
                             varDict_elev_fpdim['precipTotLogNw'] = np.empty_like(varDict_elev_fpdim['GR_Nw'])  # elevAngle 	fpdim
+                            nw_var = 'precipTotLogNw'
                         else:
                             eld = nc.variables['precipTotPSDparamLow' + add].shape[0]
                             fpd = nc.variables['precipTotPSDparamLow' + add].shape[1]
                             varDict_elev_fpdim['precipTotPSDparamLow'] = np.empty_like(varDict_elev_fpdim['GR_Nw'])  # elevAngle 	fpdim
+                            nw_var = 'precipTotPSDparamLow'
+
                         #nPSDlo = nc.variables['precipTotPSDparamLow' + add].shape[2]
 
                         #varDict_elev_fpdim['Nw'] = np.empty_like(varDict_elev_fpdim['GR_Nw']) # elevAngle 	fpdim
@@ -268,12 +285,16 @@ def process_file(filename):
                             for fp in range(fpd):
                                 #varDict_elev_fpdim['Nw'][el][fp] =  float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
                                 if isVersion7:
-                                    if np.isnan(ma.getdata(nc.variables['precipTotLogNw' + add][el])[fp]):
+                                    mx = np.ma.masked_invalid(ma.getdata(nc.variables['precipTotLogNw' + add][el]))
+                                    #if np.isnan(ma.getdata(nc.variables['precipTotLogNw' + add][el])[fp]):
+                                    if not mx[fp]:
                                         val = -9999.0
                                     else:
                                         val = float(ma.getdata(nc.variables['precipTotLogNw' + add][el])[fp])
                                 else:
-                                    if np.isnan(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp]):
+                                    mx = np.ma.masked_invalid(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el]))
+                                    #if np.isnan(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp]):
+                                    if not mx[fp]:
                                         val = -9999.0
                                     else:
                                         val = float(ma.getdata(nc.variables['precipTotPSDparamLow' + add][el])[fp][0])
@@ -284,15 +305,17 @@ def process_file(filename):
                                 #     varDict_elev_fpdim['clutterStatus'][el][fp] =  int(ma.getdata(nc.variables['clutterStatus' + add][el])[fp][0])
                                 #if np.isnan(val):
                                 if val > 0:
-                                    if isVersion7:
-                                        varDict_elev_fpdim['precipTotLogNw'][el][fp] = val - 3.0
-                                    else:
-                                        varDict_elev_fpdim['precipTotPSDparamLow'][el][fp] = val - 3.0
+                                    varDict_elev_fpdim[nw_var][el][fp] = val - 3.0
+                                    # if isVersion7:
+                                    #     varDict_elev_fpdim['precipTotLogNw'][el][fp] = val - 3.0
+                                    # else:
+                                    #     varDict_elev_fpdim['precipTotPSDparamLow'][el][fp] = val - 3.0
                                 else:
-                                    if isVersion7:
-                                        varDict_elev_fpdim['precipTotLogNw'][el][fp] = val
-                                    else:
-                                        varDict_elev_fpdim['precipTotPSDparamLow'][el][fp] = val
+                                    varDict_elev_fpdim[nw_var][el][fp] = val
+                                    # if isVersion7:
+                                    #     varDict_elev_fpdim['precipTotLogNw'][el][fp] = val
+                                    # else:
+                                    #     varDict_elev_fpdim['precipTotPSDparamLow'][el][fp] = val
 
 
                                 if len(clut_shape)== 3: # handle kuka dimension for MS swath (use ku)
@@ -318,6 +341,13 @@ def process_file(filename):
                     # All heights are in Km AGL, to get MSL Add site elevation
         #            site_elev = ma.getdata(nc.variables['site_elev'][...]).data
                     site_elev = float(ma.getdata(nc.variables['site_elev']).data)
+
+                    freezing_level_height = float(ma.getdata(nc.variables['freezing_level_height']).data)
+                    if freezing_level_height >= 0:
+                        freezing_level_height = freezing_level_height * 1000.0
+                    else:
+                        print("missing freezing_level_height in file ", filename)
+
                     #print("site_elev ", site_elev) # km
                     #exit(0)
         #            varDict_elev_fpdim['topHeight'] = 1000.0 * (nc.variables['topHeight'][:] + site_elev)  # elevAngle 	fpdim
@@ -388,6 +418,27 @@ def process_file(filename):
         #            varDict_fpdim['BBheight'] =  nc.variables['BBheight'][:]  # fpdim
                     # convert MSL to AGL
 
+                    # count statistics from GR averaging
+                    varDict_fpdim['n_gr_expected'] = nc.variables['n_gr_expected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_z_rejected'] = nc.variables['n_gr_z_rejected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_rc_rejected'] = nc.variables['n_gr_rc_rejected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_rp_rejected'] = nc.variables['n_gr_rp_rejected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_rr_rejected'] = nc.variables['n_gr_rr_rejected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_nw_rejected'] = nc.variables['n_gr_nw_rejected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_liquidWaterContent_rejected'] = nc.variables['n_gr_liquidWaterContent_rejected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_frozenWaterContent_rejected'] = nc.variables['n_gr_frozenWaterContent_rejected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_dm_rejected'] = nc.variables['n_gr_dm_rejected' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_sigmadm_rejected'] = nc.variables['n_gr_sigmadm_rejected' + add][:]  # fpdim
+
+                    varDict_fpdim['n_gr_rc_precip'] = nc.variables['n_gr_rc_precip' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_rp_precip'] = nc.variables['n_gr_rp_precip' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_rr_precip'] = nc.variables['n_gr_rr_precip' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_nw_precip'] = nc.variables['n_gr_nw_precip' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_liquidWaterContent_precip'] = nc.variables['n_gr_liquidWaterContent_precip' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_frozenWaterContent_precip'] = nc.variables['n_gr_frozenWaterContent_precip' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_dm_precip'] = nc.variables['n_gr_dm_precip' + add][:]  # fpdim
+                    varDict_fpdim['n_gr_sigmadm_precip'] = nc.variables['n_gr_sigmadm_precip' + add][:]  # fpdim
+
                     VN_filename = os.path.basename(filename)
                     # extract GPM orbit number from VN filename
                     orbit_number = int(VN_filename.split('.')[3])
@@ -413,37 +464,49 @@ def process_file(filename):
                             GPM_SENSOR = 'Unknown'
                     GR_site = getattr(nc, 'GR_file').split('_')[0]
 
-                    if data_is_dprgmi:
-                        #zero_altitude = (nc.variables['zeroDegAltitude'+add][:] / 1000.0) - site_elev
-                        zero_altitude = nc.variables['zeroDegAltitude'+add][:]
-                    else: # added zero_altitude for DPR, Ku, Ka
-                        if 'heightZeroDeg' in nc.variables.keys():
-                            #zero_altitude = (nc.variables['heightZeroDeg'][:] / 1000.0) - site_elev
-                            zero_altitude = nc.variables['heightZeroDeg'][:]
+                    # use mean of fp-based zero degree heights if freezing_level_height is missing
+                    # since the fp-based heights are also model-based
+                    if freezing_level_height < 0:
+                        if data_is_dprgmi:
+                            zero_altitude = nc.variables['zeroDegAltitude' + add][:]
                         else:
-                            zero_altitude = np.empty_like(varDict_fpdim['piaFinal'])
-                            zero_altitude[:] = -9999.0
+                            zero_altitude = nc.variables['heightZeroDeg'][:]
+                        freezing_level_height = compute_mean_height(zero_altitude)
+                        if freezing_level_height < 0:
+                            print('alternate freezing_level_height is missing')
+                        else:
+                            print('using alternate freezing_level_height ', freezing_level_height)
+
+                    # if data_is_dprgmi:
+                    #     #zero_altitude = (nc.variables['zeroDegAltitude'+add][:] / 1000.0) - site_elev
+                    #     zero_altitude = nc.variables['zeroDegAltitude'+add][:]
+                    # else: # added zero_altitude for DPR, Ku, Ka
+                    #     if 'heightZeroDeg' in nc.variables.keys():
+                    #         #zero_altitude = (nc.variables['heightZeroDeg'][:] / 1000.0) - site_elev
+                    #         zero_altitude = nc.variables['heightZeroDeg'][:]
+                    #     else:
+                    #         zero_altitude = np.empty_like(varDict_fpdim['piaFinal'])
+                    #         zero_altitude[:] = -9999.0
 
                     # Use new RUC-based freezing level variable in VN files for V7 VN version 2.2 (km)
-                    alt_BB_height = -9999.0
-                    if 'freezing_level_height' in nc.variables.keys():
-                        #alt_BB_height = nc.variables['freezing_level_height']
-                        alt_BB_height = float(ma.getdata(nc.variables['freezing_level_height']).data) * 1000.0
-                        #alt_BB_height = nc.variables['freezing_level_height'] * 1000.0
+                    #alt_BB_height = -9999.0
+                    # if 'freezing_level_height' in nc.variables.keys():
+                    #     #alt_BB_height = nc.variables['freezing_level_height']
+                    #     alt_BB_height = float(ma.getdata(nc.variables['freezing_level_height']).data) * 1000.0
+                    #     #alt_BB_height = nc.variables['freezing_level_height'] * 1000.0
 
                     #if GR_site in alt_bright_band.keys() and orbit_number in alt_bright_band[GR_site].keys():
                     #    alt_BB_height = alt_bright_band[GR_site][orbit_number]
                     #else:
                     #    alt_BB_height = -9999.0
 
-                    if data_is_dprgmi:
-                        varDict_fpdim['BBheight'] =  np.empty_like(varDict_fpdim['pia'])
-                        varDict_fpdim['BBheight'][:] = -9999.0
-                        varDict_fpdim['BBstatus'] =  np.empty_like(varDict_fpdim['pia'])
-                        varDict_fpdim['BBstatus'][:] =  -9999.0
-                        #varDict_fpdim['TypePrecip'] =  nc.variables['precipitationType'+add][:]/10000000  # fpdim
-                        # varDict_fpdim['precipTotWaterCont'] =  nc.variables['precipTotWaterCont'+add][:]  # fpdim
-                    else:
+                    # if data_is_dprgmi:
+                    #     varDict_fpdim['BBheight'] =  np.empty_like(varDict_fpdim['pia'])
+                    #     varDict_fpdim['BBheight'][:] = -9999.0
+                    #     varDict_fpdim['BBstatus'] =  np.empty_like(varDict_fpdim['pia'])
+                    #     varDict_fpdim['BBstatus'][:] =  -9999.0
+                    #else:
+                    if not data_is_dprgmi:
                         #varDict_fpdim['BBheight'] =  (nc.variables['BBheight'][:] / 1000.0) - site_elev  # fpdim
                         varDict_fpdim['BBheight'] =  nc.variables['BBheight'][:] # fpdim
                         varDict_fpdim['BBstatus'] =  nc.variables['BBstatus'][:]  # fpdim
@@ -548,22 +611,22 @@ def process_file(filename):
                     percent_rainy = 100.0 * float(site_rainy_count)/float(fpdim)
                     #print ("percent rainy ", percent_rainy)
 
-                    mean_zeroDeg = compute_mean_height(zero_altitude)
-                    # compute mean BB
-                    if data_is_dprgmi:
-                        meanBB = mean_zeroDeg
-                    else:
-                        meanBB = compute_mean_BB(varDict_fpdim['BBheight'], varDict_fpdim['BBstatus'],nc.variables['TypePrecip'])
-                    if meanBB < 0.0:
-                        if mean_zeroDeg > 0.0:
-                            meanBB = mean_zeroDeg
-                        else:
-                            if alt_BB_height > 0.0:
-                                meanBB = alt_BB_height
-                                print("missing Bright band, using Ruc_0 height ", meanBB)
-                            else:
-                                meanBB = -9999.0
-                                print("missing Bright band and Ruc_0 height...")
+                    # mean_zeroDeg = compute_mean_height(zero_altitude)
+                    # # compute mean BB
+                    # if data_is_dprgmi:
+                    #     meanBB = mean_zeroDeg
+                    # else:
+                    #     meanBB = compute_mean_BB(varDict_fpdim['BBheight'], varDict_fpdim['BBstatus'],nc.variables['TypePrecip'])
+                    # if meanBB < 0.0:
+                    #     if mean_zeroDeg > 0.0:
+                    #         meanBB = mean_zeroDeg
+                    #     else:
+                    #         if alt_BB_height > 0.0:
+                    #             meanBB = alt_BB_height
+                    #             print("missing Bright band, using Ruc_0 height ", meanBB)
+                    #         else:
+                    #             meanBB = -9999.0
+                    #             print("missing Bright band and Ruc_0 height...")
                     # else:
                     #     print("Mean Bright band ", meanBB)
 
@@ -592,7 +655,7 @@ def process_file(filename):
                             #           "site_rainy_count":site_rainy_count, "site_fp_count":fpdim,
                             #           "site_elev":site_elev, "meanBB":meanBB, "fp":fp}
                             fp_entry={"time": closestTime,
-                                      "site_percent_rainy":percent_rainy,"elev":float(elevationAngle[elev]),
+                                      "site_percent_rainy":percent_rainy,
                                       "site_rainy_count":site_rainy_count, "site_fp_count":fpdim,
                                       "fp":fp}
                             #if data_is_dprgmi:
@@ -607,10 +670,19 @@ def process_file(filename):
                             #     fp_entry["zero_deg_height"] = alt_BB_height
                             #
                             if data_is_dprgmi:
-                                fp_entry['zeroDegAltitude'] = float(ma.getdata(nc.variables['zeroDegAltitude' + add])[fp])
+                                mx = np.ma.masked_invalid(ma.getdata(nc.variables['zeroDegAltitude']))
+                                if not mx[fp]:
+                                    fp_entry['zeroDegAltitude'] = -9999.0
+                                else:
+                                    fp_entry['zeroDegAltitude'] = float(ma.getdata(nc.variables['zeroDegAltitude' + add])[fp])
                             else:  # added zero_altitude for DPR, Ku, Ka
-                                fp_entry['heightZeroDeg'] = float(ma.getdata(nc.variables['heightZeroDeg'])[fp])
-
+                                #if np.isnan(ma.getdata(nc.variables['heightZeroDeg'])[fp]):
+                                mx = np.ma.masked_invalid(ma.getdata(nc.variables['heightZeroDeg']))
+                                if not mx[fp]:
+                                    print("heightZeroDeg is NaN ")
+                                    fp_entry['heightZeroDeg'] = -9999.0
+                                else:
+                                    fp_entry['heightZeroDeg'] = float(ma.getdata(nc.variables['heightZeroDeg'])[fp])
                             for fp_key in varDict_fpdim:
                                 #print("fp_key ",fp_key)
                                 # override specific int values in the dictionary
@@ -621,8 +693,15 @@ def process_file(filename):
                             for fp_elev_key in varDict_elev_fpdim:
                                 #print("fp_elev_key ",fp_elev_key)
                                 fp_entry[fp_elev_key] = float(ma.getdata(varDict_elev_fpdim[fp_elev_key][elev])[fp])
-                            for hid_ind in range(hidim):
-                                fp_entry["hid_"+str(hid_ind+1)] = int(ma.getdata(hid[elev][fp])[hid_ind])
+                            hid_vals=[]
+                            for hid_ind in range(hidim-3): # leave off three spare bins
+                                hid_val = int(ma.getdata(hid[elev][fp])[hid_ind])
+                                #fp_entry["hid_"+str(hid_ind+1)] = int(ma.getdata(hid[elev][fp])[hid_ind])
+                                fp_entry["hid_" + str(hid_ind + 1)] = hid_val
+                                hid_vals.append(hid_val)
+                            bottom_ht = (float(ma.getdata(nc.variables['bottomHeight'+add][elev])[fp]) + site_elev) * 1000.0
+                            top_ht = (float(ma.getdata(nc.variables['topHeight'+add][elev])[fp]) + site_elev) * 1000.0
+                            fp_entry['liquid_hid_flag'] = compute_liquid_hid_flag(bottom_ht, freezing_level_height, hid_vals)
                             if have_blockage == 1:
                                 fp_entry['GR_blockage'] = float(ma.getdata(nc.variables['GR_blockage'+add][elev])[fp])
                             else:
@@ -632,8 +711,9 @@ def process_file(filename):
                             #            varDict_elev_fpdim['topHeight'] = nc.variables['topHeight'][:] # elevAngle 	fpdim
                             #               varDict_elev_fpdim['bottomHeight'] = nc.variables['bottomHeight'][:] # elevAngle 	fpdim
 
-                            bbprox = compute_BB_prox(meanBB, float(ma.getdata(varDict_elev_fpdim['topHeight'][elev])[fp]),
-                                                     float(ma.getdata(varDict_elev_fpdim['bottomHeight'][elev])[fp]))
+                            # bbprox = compute_BB_prox(meanBB, float(ma.getdata(varDict_elev_fpdim['topHeight'][elev])[fp]),
+                            #                          float(ma.getdata(varDict_elev_fpdim['bottomHeight'][elev])[fp]))
+                            bbprox = compute_BB_prox(freezing_level_height, top_ht, bottom_ht)
                             #fp_entry['BBprox'] = bbprox
 
                             # compute s2ku adjusted GR_Z
@@ -674,6 +754,7 @@ def process_file(filename):
                                 fp_entry['DPR_beam'] = 100.0 * (dpr_exp - dpr_rej)/dpr_exp
                             else:
                                 fp_entry['DPR_beam'] = 0.0
+                            fp_entry['freezing_level_height'] = freezing_level_height
                             # put last in record for partitioning
                             fp_entry['GPM_ver']=GPM_VERSION
                             fp_entry['VN_ver']=vn_version

@@ -23,6 +23,7 @@ import json2parquet
 import json
 
 from extract_vn import process_file
+print_json = True
 
 def main():
 
@@ -64,8 +65,10 @@ def main():
 
     # user netcdf variable names, these will be made lower case for partitions
     # fixed_partitions are the same for each record within a file.  Currently only implemented
-    # fixed partitions in this code
-    fixed_partitions = ['GPM_ver', 'sensor', 'scan', 'year', 'month', 'day']
+    # fixed partitions in this code that are common within a single file (i.e. file level metadata)
+    #fixed_partitions = ['GPM_ver', 'sensor', 'scan', 'year', 'month']
+    #fixed_partitions = ['sensor', 'scan', 'GR_site', 'year', 'month']
+    fixed_partitions = ['scan', 'GR_site', 'year']
 
     for root, dirs, files in os.walk(VN_DIR, topdown=False):
         for file in files:
@@ -105,6 +108,7 @@ def main():
                 # set up fixed partitions for this file
                 out_path = OUT_DIR
                 out_path_json = OUT_DIR + '/' + 'json'
+                out_path_metadata = OUT_DIR + '/' + 'meta'
                 # use first record to set output path for fixed partitions
                 for partition in fixed_partitions:
                     out_path=out_path+'/'+partition.lower()+'='+str(outputJson[0][partition])
@@ -126,11 +130,23 @@ def main():
                 # write the final parquet file
                 json2parquet.write_parquet(parquet_data, parquet_output_file, compression='snappy')
 
+                #write metadata for file
+                metadata = {"site": outputJson[0]["GR_site"],"year":outputJson[0]["year"],"month":outputJson[0]["month"],
+                            "day":outputJson[0]["day"],"time": outputJson[0]["time"], "site_rainy_count": outputJson[0]["site_rainy_count"],
+                            "site_fp_count": outputJson[0]["site_fp_count"],
+                            "site_percent_rainy": outputJson[0]["site_percent_rainy"],
+                            "meanBB": outputJson[0]["meanBB"], "have_mrms": have_mrms}
+
+                with open(out_path_metadata + '/' + file + '.meta.json', 'w') as json_file:
+                    json.dump(metadata, json_file)
+                json_file.close()
+
                 # save json files for testing
-                #json_output_file = os.path.join(out_path_json+'/'+file+'.json')
-                #os.makedirs(os.path.join(out_path_json), exist_ok=True)
-                #with open(json_output_file, 'w') as json_file:
-                #    json.dump(outputList, json_file)
+                if print_json:
+                    json_output_file = os.path.join(out_path_json+'/'+file+'.json')
+                    os.makedirs(os.path.join(out_path_json), exist_ok=True)
+                    with open(json_output_file, 'w') as json_file:
+                        json.dump(outputList, json_file)
 
                 #sys.exit()
 
