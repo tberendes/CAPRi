@@ -1,7 +1,1 @@
-netCDF4
-matplotlib
-boto3
-certifi
 requests
-urllib3
-json2parquet

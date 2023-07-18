@@ -94,17 +94,32 @@ def get_schema(client, db, table):
         print("Could not read column file:" + '/tmp/' + query_id + '.txt')
         return {'success': False, 'message': 'Could not read column file:' + '/tmp/' + query_id + '.txt'}
 
-    # set up like_not_like and min_max parameter lists
-    variable_names = types
-    for name, type in variable_names.items():
-        all_parameters.append(name)
-        if type == 'string':  # use like/not like comparisons
-            opts = [name + '_like', name + '_not_like']
-            like_not_like_parameters[name] = opts
-        elif type == 'boolean':  # use True/False comparisons
-            boolean_parameters.append(name)
-        else:  # assumed numeric, use max/min comparisons
-            opts = ['min_' + name, 'max_' + name]
-            min_max_parameters[name] = opts
+    # # reset global variables:
+    # global min_max_parameters
+    # global like_not_like_parameters
+    # global boolean_parameters
+    # global all_parameters
+    
+    min_max_parameters.clear()
+    like_not_like_parameters.clear()
+    boolean_parameters.clear()
+    all_parameters.clear()
 
+    # set up like_not_like and min_max parameter lists, reset these every time the schema is read
+    variable_names = types
+    #print("schema variable_names ",variable_names.keys())
+#    for name, type in variable_names.items():
+    for name in variable_names.keys():
+        type = variable_names[name]
+        lower_name = name.lower()
+        all_parameters.append(lower_name)
+        if type == 'string':  # use like/not like comparisons
+            opts = [lower_name + '_like', lower_name + '_not_like']
+            like_not_like_parameters[lower_name] = opts
+        elif type == 'boolean':  # use True/False comparisons
+            boolean_parameters.append(lower_name)
+        else:  # assumed numeric, use max/min comparisons
+            opts = ['min_' + lower_name, 'max_' + lower_name]
+            min_max_parameters[lower_name] = opts
+    #print("schema all_parameters: ",all_parameters)
     return {'success': True, 'message': 'Successfully downloaded types names', 'types': types}

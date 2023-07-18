@@ -53,14 +53,14 @@ def lambda_handler_utility(event, context, client):
 
     #get schema for table to determine data types of columns
     schema=get_schema(client,database,table)
-    print("schema ",schema)
+    #print("schema ",schema)
     if not schema['success']:
         print("Error:  could not read schema")
         return []
-    all_parameters=[]
-    names = schema['types'].keys()
-    for name in names:
-        all_parameters.append(name.lower())
+    # all_parameters=[]
+    # names = schema['types'].keys()
+    # for name in names:
+    #     all_parameters.append(name.lower())
 
     if 'columns' in event:
         columns = event['columns'].lower()
@@ -94,6 +94,7 @@ def lambda_handler_utility(event, context, client):
 # check this logic %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     fields = fields_list
+    print("event looking for cache... ",event)
     if "cache" in event and event['cache']:
         cache = get_cache(event, fields , client, table)
         if "qid" in cache:
@@ -146,14 +147,12 @@ def lambda_handler_utility(event, context, client):
         query_id_list.append(query_id)
     return query_id_list
 
-
-
 def lambda_handler(event, context):
     # description: To Exceute the Athena Query with the event
     # parameters: User passed event and the lambda context
     # return: query id which goes to another lambda (capri_return_query_result) through API
-    print("Event ")
-    print(event)
+    #print("Event ")
+    #print(event)
 
     params={}
     # check for different http methods and pull out parameters accordingly
@@ -170,6 +169,8 @@ def lambda_handler(event, context):
         print("DIRECT...")
         if "queryStringParameters" in event:
             params = event["queryStringParameters"]
+        elif "body" in event:
+            params = json.loads(event["body"])
         else:
             params = event
 
@@ -183,24 +184,32 @@ def lambda_handler(event, context):
     queryResponse = {}
     responseString = ''
     responseSuccess = True
-    queryId = 0
-
+    queryId = '0'
+    
+    #print('params:')
+    #print(params)
     # table_name specifies table in database, each data type will be in a
     # separate table dpr, dprgmi, gmi (gmi not currently implemented)
     # default table use dpr
 
     if 'table_name' not in params:
         params['table_name'] = 'dpr'
+        print('default table: dpr')
 
     if 'cache' not in params:
         params['cache'] = True
+        print('default cache = True')
 
     if 'qid' in params: # only check status of query for id
         queryId = params['qid']
+        print('checking status of qid ', queryId)
         # need to check exception,
         try:
             query_status = client.get_query_execution(QueryExecutionId=queryId)['QueryExecution']['Status']
             statusResponse = query_status['State']
+            print('qid ', queryId, ' status ',statusResponse)
+            file_url = "https://" + output_bucket + ".s3.amazonaws.com/" + queryId + '.csv'
+            response['body'] = {"result_url":file_url}
         except:
             statusResponse = 'MISSING'
     #elif 'get_columns' in params and params['get_columns']: # only return columns and types in the database
@@ -218,26 +227,28 @@ def lambda_handler(event, context):
             types = list(schema['types'].values())
             response['body'] = {"names":names,"types":types}
             statusResponse = 'SUCCEEDED'
+    elif 'columns' not in params:
+        print("missing columns")
+        response['body'] = {"message": "Parameter error: missing columns"}
+        statusResponse = 'FAILED'
     else:
-        if not 'columns' in params:
-            response['body'] = {"message": "Parameter error: missing columns"}
+        print("performing query...")
+        print("params ",params)
+        query_id_list = lambda_handler_utility(params, context, client)
+
+        if len(query_id_list) == 0:
+            response['body'] = {"message":"Parameter error"}
             statusResponse = 'FAILED'
         else:
-            query_id_list = lambda_handler_utility(params, context, client)
-
-            if len(query_id_list) == 0:
-                response['body'] = {"message":"Parameter error"}
-                statusResponse = 'FAILED'
-            else:
-                queryId = query_id_list[0]
-                try:
-                    query_status = client.get_query_execution(QueryExecutionId=queryId)['QueryExecution']['Status']
-                    statusResponse = query_status['State']
-                except:
-                    statusResponse = 'MISSING'
-                # is this .txt or .csv?  check bucket
-                file_url = "https://" + output_bucket + ".s3.amazonaws.com/" + queryId + '.csv'
-                response['body'] = {"url":file_url}
+            queryId = query_id_list[0]
+            try:
+                query_status = client.get_query_execution(QueryExecutionId=queryId)['QueryExecution']['Status']
+                statusResponse = query_status['State']
+            except:
+                statusResponse = 'MISSING'
+            # is this .txt or .csv?  check bucket
+            file_url = "https://" + output_bucket + ".s3.amazonaws.com/" + queryId + '.csv'
+            response['body'] = {"result_url":file_url}
 
 
         #return json.dumps({

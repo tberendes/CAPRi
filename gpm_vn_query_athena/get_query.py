@@ -140,8 +140,12 @@ def get_query(event, columns_array):
             # parameters:- i to take the position of the parameters
             # return:- min, max and difference clause after grouping
             if params == "difference":
-                clause = values[i] + ' - ' + values[i + 2] + ' ' + difference_comparators[values[i + 1]] + ' ' + values[
-                    i + 3]
+                clause = values[i].lower() + ' - ' + values[i + 2].lower() + ' ' + difference_comparators[values[i + 1]] + ' ' + values[i + 3]
+            elif params == "bool":
+                if values[i+1].lower() == "true":
+                    clause = values[i] 
+                else:
+                    clause = ' not ' + values[i]
             else:  # params == "min" or params == "max"
                 if values[i].strip() == "datetime":
                     if params == "min":
@@ -152,7 +156,7 @@ def get_query(event, columns_array):
                     clause = get_date_time_clause(values[i + 1], comparator)
 
                 else:
-                    clause = values[i] + difference_comparators[operator] + values[i + 1]
+                    clause = values[i].lower() + difference_comparators[operator] + values[i + 1].lower()
             return clause
 
         for i in range(0, n, step):
@@ -168,6 +172,9 @@ def get_query(event, columns_array):
     if 'max' in event:
         generic('max', 2, 'lte')
 
+    if 'bool' in event:
+        generic('bool', 2)
+
     # need to get list of columns from the API, then loop through
 
     # boolean parameters
@@ -180,20 +187,29 @@ def get_query(event, columns_array):
             filter_clauses.append(clause)
 
     # parameters to be queried by specific values , eg: latitude =90
-    for parameter in all_parameters:
-        if parameter in event:
+
+    for parameter in event:
+        lower_param = parameter.lower()
+        if lower_param in all_parameters:
             val = event[parameter]
-            clause = parameter + ' = ' + str(val)
+            clause = lower_param + ' = ' + str(val)
             filter_clauses.append(clause)
+        
+    # for parameter in all_parameters:
+    #     if parameter in event:
+    #         val = event[parameter]
+    #         clause = parameter + ' = ' + str(val)
+    #         filter_clauses.append(clause)
 
     # Appends to SQL filter clauses
     append_sql_filter_clauses(min_max_parameters, comparators_gte_lte)
     append_sql_filter_clauses(like_not_like_parameters, comparators_like_not_like)
 
-    if "swath" in event and event["swath"] == "outer":
-        append_sql_filter_clauses(swath_parameters, comparators_gt_lt, OR)
-    else:
-        append_sql_filter_clauses(swath_parameters, comparators_gt_lt)
+    if "swath" in event:
+        if event["swath"] == "outer":
+            append_sql_filter_clauses(swath_parameters, comparators_gt_lt, OR)
+        else:
+            append_sql_filter_clauses(swath_parameters, comparators_gt_lt)
 
     append_sql_filter_clauses(datetime_parameters, comparators_gt_lt)
 

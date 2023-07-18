@@ -23,7 +23,7 @@ import json2parquet
 import json
 
 from extract_vn import process_file
-print_json = True
+print_json = False
 
 def main():
 
@@ -106,7 +106,7 @@ def main():
                 # use outputJson.pop("key")
 
                 # set up fixed partitions for this file
-                out_path = OUT_DIR
+                out_path = OUT_DIR + '/' + 'parquet'
                 out_path_json = OUT_DIR + '/' + 'json'
                 out_path_metadata = OUT_DIR + '/' + 'meta'
                 # use first record to set output path for fixed partitions

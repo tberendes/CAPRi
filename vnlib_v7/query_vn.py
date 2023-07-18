@@ -15,18 +15,8 @@
 # ---------------------------------------------------------------------------------------------
 
 # --Do all the necessary imports
-import csv
-import gzip
-import os
-import shutil
-import string
-import sys
-import time
-import urllib
 import datetime
-import tempfile
 
-import requests
 import vnlib
 
 def main():
@@ -35,34 +25,35 @@ def main():
     print("start time: ", ts)
 
 #    params = {'start_time': "2019-03-21 00:00:00", 'end_time': "2019-04-21 00:00:00"}
-    # initialize query class to start a new query
+    # initialize query class to start a new query, this must be done for every new query
     query = vnlib.VNQuery()
 
     # can call an API to get a list of column names defined in the Athena table
-    res = query.get_columns('dpr')
+    res = query.get_schema('dpr')
     if res['status'] != 'success':
         print("Column name query failed: ", res['message'])
         exit(-1)
-    columns = res['columns']
+    columns = res['names']
     print ("Athena column names: ",columns)
 
-    res = query.get_column_types('dpr')
-    if res['status'] != 'success':
-        print("Column type query failed: ", res['message'])
-        exit(-1)
     column_types = res['types']
     print ("Athena column types: ",column_types)
 
-    exit(0)
+    #exit(0)
 
 #GR_Z_s2Ku vs. zFactorCorrected; Sensor: DPR; Scan: NS) from 05/01/2014-09/10/2020
-    query.set_time_range("2014-05-01 00:00:00", "2020-09-10 00:00:00")
-    query.set_columns("GR_Z_s2Ku,zFactorCorrected")
-    query.add_scan_match("NS")
-    query.add_sensor_match("DPR")
+    query.set_time_range("2014-03-01 00:00:00", "2020-09-10 00:00:00")
+    query.set_columns("GR_Z_s2Ku,zFactorFinal")
+    query.add_scan_match("FS_Ku")
+    # query.add_sensor_match("DPR")
+    # since each table if specific to sensor use this now, defaults to 'dpr'
+    query.set_table_name("dpr")
     #query.add_parameter('cache', 'false')
     query.set_beam_filling_thresh(100.0)
-    query.set_bbprox_above()
+    #query.set_bbprox_above()
+
+    query.add_variable_bool_true('liquid_hid_flag')
+    query.add_parameter('cache', False)
 
     # initialize query parameters
     #query.set_time_range("2019-03-21 00:00:00", "2019-03-24 00:00:00")
@@ -125,7 +116,8 @@ def main():
 
     # submit query to AWS
     res = query.submit_query()
-    if res['status'] != 'success':
+
+    if res['status'] == 'FAILED':
         print("Query failed: ", res['message'])
         exit(-1)
 
@@ -134,7 +126,7 @@ def main():
     # which is automatically deleted on exit of program
     # check 'status' entry for 'success' or 'failed'
     print("Saving csv file...")
-    res = query.download_csv(filename="test_csv.csv")
+    res = query.download_csv()
     if res['status'].lower() == 'empty':
         print("Empty query, parameters: ", query.get_params_json())
         exit(-1)
@@ -143,13 +135,22 @@ def main():
         exit(-1)
 
     # exit if you only want to download result csv file
+    # save csv file for later use
+    result=query.save_csv("test_csv.csv")
+    if result['status'] != 'success':
+        print("get_csv failed: ", result['message'])
+        exit(-1)
+    else:
+        print("get_csv succeeded: ", result['message'])
     exit(0)
 
     # download (if not already downloaded) and read CSV file and return dictionary with status and results
     result = query.get_csv()
     if result['status'] != 'success':
-        print("Get results failed: ", result['message'])
+        print("get_csv failed: ", result['message'])
         exit(-1)
+    else:
+        print("get_csv succeeded: ", result['message'])
 
     if 'status' not in result or result['status'] == 'failed':
         print("Query failed")

@@ -209,9 +209,9 @@ def process_file(filename):
                     varDict_elev_fpdim['GR_RC_rainrate'] = nc.variables['GR_RC_rainrate'+add][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_RC_rainrate_StdDev'] = nc.variables['GR_RC_rainrate_StdDev'+add][:]   # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_RC_rainrate_Max'] =  nc.variables['GR_RC_rainrate_Max'+add][:]  # elevAngle 	fpdim
-                    varDict_elev_fpdim['GR_RR_rainrate'] = nc.variables['GR_RR_rainrate'+add][:]   # elevAngle 	fpdim
-                    varDict_elev_fpdim['GR_RR_rainrate_StdDev'] =  nc.variables['GR_RR_rainrate_StdDev'+add][:]  # elevAngle 	fpdim
-                    varDict_elev_fpdim['GR_RR_rainrate_Max'] = nc.variables['GR_RR_rainrate_Max'+add][:]   # elevAngle 	fpdim
+#                    varDict_elev_fpdim['GR_RR_rainrate'] = nc.variables['GR_RR_rainrate'+add][:]   # elevAngle 	fpdim
+#                    varDict_elev_fpdim['GR_RR_rainrate_StdDev'] =  nc.variables['GR_RR_rainrate_StdDev'+add][:]  # elevAngle 	fpdim
+#                    varDict_elev_fpdim['GR_RR_rainrate_Max'] = nc.variables['GR_RR_rainrate_Max'+add][:]   # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_RP_rainrate'] = nc.variables['GR_RP_rainrate'+add][:]   # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_RP_rainrate_StdDev'] =  nc.variables['GR_RP_rainrate_StdDev'+add][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_RP_rainrate_Max'] = nc.variables['GR_RP_rainrate_Max'+add][:]   # elevAngle 	fpdim
@@ -220,9 +220,9 @@ def process_file(filename):
                     varDict_elev_fpdim['GR_Dm_StdDev'] =  nc.variables['GR_Dm_StdDev'+add][:]  # elevAngle 	fpdim
                     varDict_elev_fpdim['GR_Dm_Max'] = nc.variables['GR_Dm_Max'+add][:]   # elevAngle 	fpdim
 
-                    varDict_elev_fpdim['GR_sigmaDm'] = nc.variables['GR_sigmaDm'+add][:]   # elevAngle 	fpdim
-                    varDict_elev_fpdim['GR_sigmaDm_StdDev'] =  nc.variables['GR_sigmaDm_StdDev'+add][:]  # elevAngle 	fpdim
-                    varDict_elev_fpdim['GR_sigmaDm_Max'] = nc.variables['GR_sigmaDm_Max'+add][:]   # elevAngle 	fpdim
+#                    varDict_elev_fpdim['GR_sigmaDm'] = nc.variables['GR_sigmaDm'+add][:]   # elevAngle 	fpdim
+#                    varDict_elev_fpdim['GR_sigmaDm_StdDev'] =  nc.variables['GR_sigmaDm_StdDev'+add][:]  # elevAngle 	fpdim
+#                    varDict_elev_fpdim['GR_sigmaDm_Max'] = nc.variables['GR_sigmaDm_Max'+add][:]   # elevAngle 	fpdim
                     if data_is_dprgmi:
                         if isVersion7:
                             varDict_elev_fpdim['precipTotDm'] = nc.variables['precipTotDm' + add][:]  # elevAngle 	fpdim
@@ -419,25 +419,26 @@ def process_file(filename):
                     # convert MSL to AGL
 
                     # count statistics from GR averaging
-                    varDict_fpdim['n_gr_expected'] = nc.variables['n_gr_expected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_z_rejected'] = nc.variables['n_gr_z_rejected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_rc_rejected'] = nc.variables['n_gr_rc_rejected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_rp_rejected'] = nc.variables['n_gr_rp_rejected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_rr_rejected'] = nc.variables['n_gr_rr_rejected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_nw_rejected'] = nc.variables['n_gr_nw_rejected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_liquidWaterContent_rejected'] = nc.variables['n_gr_liquidWaterContent_rejected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_frozenWaterContent_rejected'] = nc.variables['n_gr_frozenWaterContent_rejected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_dm_rejected'] = nc.variables['n_gr_dm_rejected' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_sigmadm_rejected'] = nc.variables['n_gr_sigmadm_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_expected'] = nc.variables['n_gr_expected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_z_rejected'] = nc.variables['n_gr_z_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_rc_rejected'] = nc.variables['n_gr_rc_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_rp_rejected'] = nc.variables['n_gr_rp_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_rr_rejected'] = nc.variables['n_gr_rr_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_nw_rejected'] = nc.variables['n_gr_nw_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_liquidWaterContent_rejected'] = nc.variables['n_gr_liquidWaterContent_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_frozenWaterContent_rejected'] = nc.variables['n_gr_frozenWaterContent_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_dm_rejected'] = nc.variables['n_gr_dm_rejected' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_sigmadm_rejected'] = nc.variables['n_gr_sigmadm_rejected' + add][:]  # fpdim
+                    #
+                    # varDict_fpdim['n_gr_rc_precip'] = nc.variables['n_gr_rc_precip' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_rp_precip'] = nc.variables['n_gr_rp_precip' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_rr_precip'] = nc.variables['n_gr_rr_precip' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_nw_precip'] = nc.variables['n_gr_nw_precip' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_dm_precip'] = nc.variables['n_gr_dm_precip' + add][:]  # fpdim
+                    # varDict_fpdim['n_gr_sigmadm_precip'] = nc.variables['n_gr_sigmadm_precip' + add][:]  # fpdim
 
-                    varDict_fpdim['n_gr_rc_precip'] = nc.variables['n_gr_rc_precip' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_rp_precip'] = nc.variables['n_gr_rp_precip' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_rr_precip'] = nc.variables['n_gr_rr_precip' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_nw_precip'] = nc.variables['n_gr_nw_precip' + add][:]  # fpdim
                     varDict_fpdim['n_gr_liquidWaterContent_precip'] = nc.variables['n_gr_liquidWaterContent_precip' + add][:]  # fpdim
                     varDict_fpdim['n_gr_frozenWaterContent_precip'] = nc.variables['n_gr_frozenWaterContent_precip' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_dm_precip'] = nc.variables['n_gr_dm_precip' + add][:]  # fpdim
-                    varDict_fpdim['n_gr_sigmadm_precip'] = nc.variables['n_gr_sigmadm_precip' + add][:]  # fpdim
 
                     VN_filename = os.path.basename(filename)
                     # extract GPM orbit number from VN filename
@@ -534,7 +535,7 @@ def process_file(filename):
                         SCAN_TYPE = add.strip('_')
                     else:
                         SCAN_TYPE = getattr(nc, 'DPR_ScanType')
-                    vn_version =  str(ma.getdata(nc.variables['version'][0]))
+                    #vn_version =  str(ma.getdata(nc.variables['version'][0]))
 
                     #print('version ' + str(vn_version))
                     # new version 7 variables
@@ -656,8 +657,8 @@ def process_file(filename):
                             #           "site_elev":site_elev, "meanBB":meanBB, "fp":fp}
                             fp_entry={"time": closestTime,
                                       "site_percent_rainy":percent_rainy,
-                                      "site_rainy_count":site_rainy_count, "site_fp_count":fpdim,
-                                      "fp":fp}
+                                      "site_rainy_count":site_rainy_count, "site_fp_count":fpdim}
+                            #          "fp":fp}
                             #if data_is_dprgmi:
                             #    fp_entry["ruc_0_height"] = float(ma.getdata(zero_altitude)[fp])
                             #else:
@@ -694,7 +695,8 @@ def process_file(filename):
                                 #print("fp_elev_key ",fp_elev_key)
                                 fp_entry[fp_elev_key] = float(ma.getdata(varDict_elev_fpdim[fp_elev_key][elev])[fp])
                             hid_vals=[]
-                            for hid_ind in range(hidim-3): # leave off three spare bins
+                            for hid_ind in range(hidim-4): # leave off three spare bins and dropped 'HR' category
+                            #for hid_ind in range(hidim - 3):  # leave off three spare bins
                                 hid_val = int(ma.getdata(hid[elev][fp])[hid_ind])
                                 #fp_entry["hid_"+str(hid_ind+1)] = int(ma.getdata(hid[elev][fp])[hid_ind])
                                 fp_entry["hid_" + str(hid_ind + 1)] = hid_val
@@ -745,6 +747,7 @@ def process_file(filename):
                                 dpr_rej = float(ma.getdata(nc.variables['n_dpr_corr_z_rejected'][elev])[fp])
                                 type_precip = int(ma.getdata(nc.variables['TypePrecip'][fp]))
 
+                            fp_entry['n_samples_z'] = gr_exp - gr_rej
                             #print ("dpr_exp ", dpr_exp, " dpr_rej ",dpr_rej)
                             if gr_exp > 0:
                                 fp_entry['GR_beam'] = 100.0 * (gr_exp - gr_rej)/gr_exp
@@ -757,7 +760,7 @@ def process_file(filename):
                             fp_entry['freezing_level_height'] = freezing_level_height
                             # put last in record for partitioning
                             fp_entry['GPM_ver']=GPM_VERSION
-                            fp_entry['VN_ver']=vn_version
+                            #fp_entry['VN_ver']=vn_version
                             fp_entry['sensor']=GPM_SENSOR
                             fp_entry['scan']=SCAN_TYPE
                             fp_entry['year']=year

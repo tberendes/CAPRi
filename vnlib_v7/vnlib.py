@@ -24,31 +24,24 @@ import json
 import requests
 
 class VNQuery:
-    # these are the API endpoints for the query submission and retrieval of results
-    # they are experimental, and subject to change
-    #old versions:
-    # url_query = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/'
-    # url_result = 'https://e3x3fqdwla.execute-api.us-east-1.amazonaws.com/test3/result/'
-
-    # new version with 'fp' and 'zero_deg_height'
-    url_query = 'https://o381wx9rqh.execute-api.us-east-1.amazonaws.com/dev/'
-    url_result = 'https://o381wx9rqh.execute-api.us-east-1.amazonaws.com/dev/result'
-    url_columns = 'https://aieecex29e.execute-api.us-east-1.amazonaws.com/default/gpm_vn_get_athena_columns'
+    # this is the operational API endpoint for the query submission and retrieval of results
+    url_query = 'https://dvr3ftunkehwxoqbxloytrhw5i0wzykw.lambda-url.us-east-1.on.aws/'
 
     max_retry_count = 30000
     retry_interval = 2
 
     def __init__(self):
         self.params = {}
-        self.query_ids=[]
+        self.query_id=''
         #self.q_params={}
-        self.result_urls=[]
+        self.result_url=''
         self.csv_filename=''
         self.result_downloaded = False
         self.temp_file_flag = False
         self.min_list=[]
         self.max_list=[]
         self.diff_list=[]
+        self.bool_list=[]
         self.typeprecip=-1
         self.bbprox=-1
 
@@ -96,6 +89,9 @@ class VNQuery:
         diff_param = self.make_comma_list(self.diff_list)
         if len(diff_param) >0:
             self.params['difference']=diff_param
+        bool_param = self.make_comma_list(self.bool_list)
+        if len(bool_param) >0:
+            self.params['bool']=bool_param
 
     def submit_query(self):
         # delete previous query temporary CSV file if present
@@ -106,10 +102,11 @@ class VNQuery:
         #print("min_list", self.min_list)
         #print("max_list", self.max_list)
         #print("diff_list", self.diff_list)
-        #print("params", self.params)
+        print("params", self.params)
         try:
             #response = requests.get(url_query, params=self.params)
-            response = requests.post(self.url_query, self.get_params_json())
+#            response = requests.post(self.url_query, json=self.get_params_json())
+            response = requests.post(self.url_query, json=self.get_params())
 
             # If the response was successful, no Exception will be raised
             response.raise_for_status()
@@ -121,19 +118,25 @@ class VNQuery:
             return {'status': 'failed', 'message': 'Error occurred during query submission'}
         #        else:
         print('Successfully connected with server, submitted query ...')
+        print(self.get_params_json())
 
-        #print(response.text)
+        print(response.text)
         #self.query_id = response.text.split('queryId=')[1].split('}')[0]
 #        resp_json = json.loads(response.text)
         #print(response.text.replace("\\","").strip("\""))
-        resp_json = json.loads(response.text.replace("\\","").strip("\""))
+#        resp_json = json.loads(response.text.replace("\\","").strip("\""))
         #self.query_id = response.text.split('queryId:')[1].split('}')[0]
-        self.query_ids = resp_json['queryIds']
 
-        #print(self.query_ids)
-        #self.q_params = {'qids': self.query_ids}
+        resp_json = response.json()
+        if resp_json['body']['status'] != 'FAILED':
+            self.query_id = resp_json['body']['qid']
+            self.result_url = resp_json['body']['result_url']
 
-        return {'status': 'success', 'message': 'Query successfully submitted'}
+        #print(self.query_id)
+        #self.q_params = {'qid': self.query_id}
+
+        #return {'status': 'success', 'message': 'Query successfully submitted'}
+        return resp_json['body']
 
     def result_loop(self, url, params):
         status = 'None'
@@ -155,13 +158,13 @@ class VNQuery:
                 print(f'Other error occurred: {err}')
             #        else:
 
-            r = response.json()
-            # print("r ",r)
+            r = response.json()['body']
+            #print("r ",r)
             if 'status' in r:
                 status = r['status']
             if str(status).lower() == 'succeeded':
                 break
-            if str(status).lower() == 'failed' or str(status).lower() == 'error':
+            if str(status).lower() == 'failed' or str(status).lower() == 'error' or str(status).lower() == 'missing':
                 return {'status': 'failed', 'message': str(status).lower()}
             print("query status: ", str(status).lower())
             time.sleep(self.retry_interval)
@@ -172,120 +175,48 @@ class VNQuery:
         return r
 
     def wait_for_query(self):
-        # From Pooja:  Hi Todd, I have implemented pagination and also the status (Running, queued, cancelled, failed, succeeded, error)
-        # for the results. The api returns 100 items by default but you can configure that using page_size parameter
-        # in the url. For the pagination, I have used page_token parameter. The page_token parameter for next page
-        # is given in the result json.
-        # status = 'waiting'
-        # retry_count = 0
         print('Waiting for results...')
-        # set page size to zero for status only
 
-#        params['page_size'] = 0
-#         while True:
-#             # loop until result is ready or an error has occurred
-#             try:
-#                 response = requests.get(self.url_result, params=self.q_params)
-#
-#                 # If the response was successful, no Exception will be raised
-#                 response.raise_for_status()
-#             except requests.HTTPError as http_err:
-#                 if response.status_code != 425: # 425 is returned from lambda if query is in progress
-#                     print(f'HTTP error occurred: {http_err}')
-#                     print(response.json())
-#             except Exception as err:
-#                 print(f'Other error occurred: {err}')
-#             #        else:
-#
-#             r = response.json()
-#             # print("r ",r)
-#             if 'status' in r:
-#                 status = r['status']
-#             if str(status).lower() == 'succeeded':
-#                 break
-#             if str(status).lower() == 'failed' or str(status).lower() == 'error':
-#                 return {'status': 'failed', 'message': str(status).lower()}
-#             print("query status: ", str(status).lower())
-#             time.sleep(self.retry_interval)
-#             retry_count = retry_count + 1
-#             if retry_count > self.max_retry_count:
-#                 print('HTTP Error: Exceeded maximum retries')
-#                 return {'status': 'failed', 'message': 'HTTP Error: Exceeded maximum retries'}
+        r = self.result_loop(self.url_query, {'qid':self.query_id})
+        #r = self.result_loop(self.url_result, self.q_params)
 
-        # loop over all sub-queries
-        self.result_urls=[]
-        for qid in self.query_ids:
-            r = self.result_loop(self.url_result, {'qid':qid})
-            #r = self.result_loop(self.url_result, self.q_params)
+        if 'result_url' in r:
+            #self.result_url.append(r['body']['result_url'])
+            self.result_url=r['result_url']
+            # print("Athena result URL: ", self.result_url)
+            return {'status': 'success', 'message': 'Successfully performed query'}
+        else:
+            return {'status': 'failed', 'message': 'Athena query failed'}
+        # return r
 
-            if 'file_url' in r:
-                self.result_urls.append(r['file_url'])
-            else:
-                return r
-
-        #print("Athena result URLs: ", self.result_urls)
-
-        return {'status': 'success', 'message': 'Successfully performed query'}
-
-    def download_csv(self, **kwargs):
+    def download_csv(self):
         # loop over query_ids, need to combine individual csv files into one
         # file_name = self.result_url.split("/")[-1]
         res = self.wait_for_query()
-        if res['status'].lower() == 'empty':
-            return {'status': 'empty', 'message': 'CSV empty results'}
+#        if res['status'].lower() == 'empty':
+#            return {'status': 'empty', 'message': 'CSV empty results'}
         if res['status'].lower() != 'success':
-            return {'status': 'failed', 'message': 'CSV download failed'}
+            return {'status': 'failed', 'message': 'CSV file could not be downloaded due to failed Athena query '}
 
-        # add loop over result_urls, use temp filenames
-        temp_fn = []
-        for result_url in self.result_urls:
-            ft = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
-            temp_fn.append(ft.name)
-            #print("downloading CSV file ", result_url, ' ...')
-            get_response = requests.get(result_url, stream=True)
-            #        with open(file_name, 'wb') as f:
-            for chunk in get_response.iter_content(chunk_size=1024):
-                if chunk:  # filter out keep-alive new chunks
-                    ft.write(chunk)
-            #print("temp fname ", ft.name)
-            ft.close()
+        ft = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
+        temp_fn=ft.name
+        #print("downloading CSV file ", result_url, ' ...')
+        get_response = requests.get(self.result_url, stream=True)
+        #        with open(file_name, 'wb') as f:
+        for chunk in get_response.iter_content(chunk_size=1024):
+            if chunk:  # filter out keep-alive new chunks
+                ft.write(chunk)
+        #print("temp fname ", ft.name)
+        ft.close()
         #print("combining CSV files...")
 
-        # read individual result files and combine into a list of lines
-        # read input files line by line
         lines=[]
-        tmpFileCnt = 0
-        for fn in temp_fn:
-            with open(fn) as f:
-                lines.append(list(f))
-            tmpFileCnt += 1
+        with open(temp_fn) as f:
+            lines.append(list(f))
 
-        # now combine temporary csv files into one output file
-
-        # open temporary output file
-        f = tempfile.NamedTemporaryFile(mode='w', delete=False)
-        self.csv_filename = f.name
+        self.csv_filename = temp_fn
         self.temp_file_flag = True
-        for key, value in kwargs.items():
-            if key == 'filename':
-                self.csv_filename = value
-                self.temp_file_flag = False
-                f = open(self.csv_filename, 'w')
 
-        # write individual csv files into single output file
-        # asssume all csv files are same number of lines, and lines are in same order
-        # this can only be guaranteed if the query is ordered by a unique ID.  This is
-        # currently not the case, so we will probably disable the multuple csv file returns
-        # unless a solution is found.  For now, we will support the logic for consolidating
-        # multiple CSV files in case it is implemented at some point
-        for lineInd in range(len(lines[0])):
-            line = str(lines[0][lineInd]).rstrip().replace("\"","")
-            for tmpInd in range(1,tmpFileCnt):
-                line = line + ',' + str(lines[tmpInd][lineInd]).rstrip().replace("\"","")
-            f.write(line+'\n')
-
-        #print("fname ", self.csv_filename)
-        f.close()
         self.result_downloaded = True
 
         return {'status':'success', 'message':'Successfully downloaded CSV results'}
@@ -337,6 +268,11 @@ class VNQuery:
     def set_columns(self, comma_list):
         self.params['columns'] = comma_list
 
+    # Each data type DPR, DPRGMI, GMI is contained in a separate table
+    def set_table_name(self,table):
+        if 'table_name' not in self.params:
+            self.params['table_name'] = table
+
     def add_column(self, column):
         if 'columns' not in self.params:
             self.params['columns'] = column
@@ -377,19 +313,19 @@ class VNQuery:
         else:
             self.params['gpm_ver_not_like'] = self.params['gpm_ver_not_like'] + ',' + version
 
-    def add_vn_version_match(self,version):
-        if 'vn_ver_like' not in self.params:
-            self.params['vn_ver_like'] = version
-        else:
-            self.params['vn_ver_like'] = self.params['vn_ver_like'] + ',' + version
+    # def add_vn_version_match(self,version):
+    #     if 'vn_ver_like' not in self.params:
+    #         self.params['vn_ver_like'] = version
+    #     else:
+    #         self.params['vn_ver_like'] = self.params['vn_ver_like'] + ',' + version
+    #
+    # def add_vn_version_exclude(self,version):
+    #     if 'vn_ver_not_like' not in self.params:
+    #         self.params['vn_ver_not_like'] = version
+    #     else:
+    #         self.params['vn_ver_not_like'] = self.params['vn_ver_not_like'] + ',' + version
 
-    def add_vn_version_exclude(self,version):
-        if 'vn_ver_not_like' not in self.params:
-            self.params['vn_ver_not_like'] = version
-        else:
-            self.params['vn_ver_not_like'] = self.params['vn_ver_not_like'] + ',' + version
-
-    #NS, MS, HS, FS
+    #NS, MS, HS, FS, FS_Ku, FS_Ka
     def add_scan_match(self,scan):
         if 'scan_like' not in self.params:
             self.params['scan_like'] = scan
@@ -414,17 +350,17 @@ class VNQuery:
         else:
             self.params['sensor_not_like'] = self.params['sensor_not_like'] + ',' + sensor
 
-    def add_vn_filename_match(self,fn):
-        if 'vn_filename_like' not in self.params:
-            self.params['vn_filename_like'] = fn
-        else:
-            self.params['vn_filename_like'] = self.params['vn_filename_like'] + ',' + fn
-
-    def add_vn_filename_exclude(self,fn):
-        if 'vn_filename_not_like' not in self.params:
-            self.params['vn_filename_not_like'] = fn
-        else:
-            self.params['vn_filename_not_like'] = self.params['vn_filename_not_like'] + ',' + fn
+    # def add_vn_filename_match(self,fn):
+    #     if 'vn_filename_like' not in self.params:
+    #         self.params['vn_filename_like'] = fn
+    #     else:
+    #         self.params['vn_filename_like'] = self.params['vn_filename_like'] + ',' + fn
+    #
+    # def add_vn_filename_exclude(self,fn):
+    #     if 'vn_filename_not_like' not in self.params:
+    #         self.params['vn_filename_not_like'] = fn
+    #     else:
+    #         self.params['vn_filename_not_like'] = self.params['vn_filename_not_like'] + ',' + fn
 
     # can also use % as a wildcard, i.e. site="K%" and list of sites i.e. site="KI%,KM%,KF%"
     def add_gr_site_match(self,site):
@@ -468,6 +404,12 @@ class VNQuery:
         self.max_list.append(variable)
         self.max_list.append(max)
 #        self.max_list.append(str(max))
+    def add_variable_bool_true(self,variable):
+        self.bool_list.append(variable.lower())
+        self.bool_list.append('true')
+    def add_variable_bool_false(self,variable):
+        self.bool_list.append(variable.lower())
+        self.bool_list.append('false')
     def add_variable_range(self,variable,min,max):
         self.add_variable_min(variable,min)
         self.add_variable_max(variable,max)
@@ -546,22 +488,10 @@ class VNQuery:
     def set_blockage_thresh_gr(self,value):
         self.add_variable_max('GR_blockage',value)
 
-#         Todd,
-# You can use https://3gfy5bwy4b.execute-api.us-east-1.amazonaws.com/test/?table=<name_of_the_athena_table> .
-# However, even if you don’t provide the table query string parameter, it will use the table we are using for our
-# latest capri core API(the staging one).
-# That will give you a qid, which can be passed to the capri core fetch result api
-# ( the same one that we are using for capri core result).
-# https://o381wx9rqh.execute-api.us-east-1.amazonaws.com/dev/result?qid=<query id>
-# Actually, the columns name are always static for a table. So, you can always use
-# https://o381wx9rqh.execute-api.us-east-1.amazonaws.com/dev/result?qid=f30c3bde-e902-48a4-b887-f110ac2eb770
-# as a hard link if you want to reduce the number of queries to the Athena table.
-
-    def get_columns(self,table_name):
+    def get_schema(self,table_name):
         try:
             #response = requests.get(url_query, params=self.params)
-            response = requests.get(self.url_columns+'?table='+table_name)
-
+            response = requests.get(self.url_query+'?table_name='+table_name+'&get_columns=True')
             # If the response was successful, no Exception will be raised
             response.raise_for_status()
         except requests.HTTPError as http_err:
@@ -575,116 +505,6 @@ class VNQuery:
 
         #print(response.text)
         resp_json = json.loads(response.text)
-        #print("json: ", resp_json)
-        # #self.query_id = response.text.split('queryId=')[1].split('}')[0]
-        # resp_json = json.loads(response.text)
-        # #self.query_id = response.text.split('queryId:')[1].split('}')[0]
-        # query_id = resp_json['queryId']
-        # print(query_id)
-        #q_params = 'qid='+ response.text
+        print ("resp_json")
 
-        #q_params = {'qid': response.text.strip('"')}
-        #q_params = {'qid': response.text.split('/')[-1].split('.')[0]}
-        #print('Waiting for columns...')
-
-        #r = self.result_loop(self.url_columns_result, q_params)
-
-        if 'file_url' in resp_json:
-            result_url = resp_json['file_url']
-        else:
-            return response
-        #print("Athena Column query result URL: ", result_url)
-
-        # if 'data' in r:
-        #     data = r['data']
-        #     resp_json = json.loads(response.text)
-        #     for
-        # else:
-        #     return {'status': 'failed', 'message': 'Error missing data in column query'}
-
-        #file_name = self.result_url.split("/")[-1]
-        #f = tempfile.NamedTemporaryFile(mode='w+b', delete=False)
-        #temp_filename=f.name
-        #temp_filename="temp_column.json"
-
-        #print("downloading CSV column file ", result_url, ' ...')
-        get_response = requests.get(result_url, stream=True)
-        with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as f:
-            temp_filename = f.name
-            for chunk in get_response.iter_content(chunk_size=1024):
-                    if chunk:  # filter out keep-alive new chunks
-                        f.write(chunk)
-        # print("temp_filename ", temp_filename)
-
-
-        #get_response = requests.get(result_url, stream=True)
-        #        with open(file_name, 'wb') as f:
-        #with open(temp_filename, 'wb') as f:
-        #     for chunk in get_response.iter_content(chunk_size=1024):
-        #         if chunk:  # filter out keep-alive new chunks
-        #             f.write(chunk)
-        # print("temp_filename ", temp_filename)
-        #f.close()
-        try:
-            lines = []
-            with open(temp_filename, 'r') as f:
-                for line in f:
-                    lines.append(line.strip())
-            #f.close()
-        except IOError:
-            print("Could not read column file:" + temp_filename)
-            return {'status': 'failed', 'message': 'Could not read column file:' + temp_filename}
-
-        return {'status':'success', 'message':'Successfully downloaded columns names', 'columns':lines}
-
-    def get_column_types(self,table_name):
-        try:
-            #response = requests.get(url_query, params=self.params)
-            response = requests.get(self.url_columns+'?table='+table_name+'&schema=True')
-
-            # If the response was successful, no Exception will be raised
-            response.raise_for_status()
-        except requests.HTTPError as http_err:
-            print(f'HTTP error occurred: {http_err}')  # Python 3.6
-            return {'status': 'failed', 'message': 'HTTP error occurred during column query submission'}
-        except Exception as err:
-            print(f'Other error occurred: {err}')  # Python 3.6
-            return {'status': 'failed', 'message': 'Error occurred during column query submission'}
-        #        else:
-        print('Successfully connected with server, submitted schema query ...')
-
-        #print(response.text)
-        resp_json = json.loads(response.text)
-        if 'file_url' in resp_json:
-            result_url = resp_json['file_url']
-        else:
-            return response
-        #print("downloading schema file ", result_url, ' ...')
-        get_response = requests.get(result_url, stream=True)
-        with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as f:
-            temp_filename = f.name
-            for chunk in get_response.iter_content(chunk_size=1024):
-                    if chunk:  # filter out keep-alive new chunks
-                        f.write(chunk)
-        # print("temp_filename ", temp_filename)
-        try:
-            types = {}
-            with open(temp_filename, 'r') as f:
-                cnt = 0
-                for line in f:
-                    #print("line ", line)
-                    # skip first line and "PARTITIONED BY'
-                    if cnt == 0 or line.find('PARTITIONED BY')>=0:
-                        cnt = cnt + 1
-                        continue
-                    if line.find('ROW FORMAT')>=0:
-                        break
-                    parsed_line=line.strip().split(' ')
-                    #print("var:",parsed_line[0].strip('`')," type:",parsed_line[1])
-                    types[parsed_line[0].strip('`')]=parsed_line[1]
-                    cnt = cnt + 1
-        except IOError:
-            print("Could not read column file:" + temp_filename)
-            return {'status': 'failed', 'message': 'Could not read column file:' + temp_filename}
-
-        return {'status':'success', 'message':'Successfully downloaded types names', 'types':types}
+        return {'status':'success', 'names':resp_json['body']['names'],'types':resp_json['body']['types']}
