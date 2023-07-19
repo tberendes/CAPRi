@@ -65,25 +65,14 @@ def compute_BB_prox(meanBB, top, botm):
             htcat = 2  # within BB
     return htcat
 def compute_liquid_hid_flag(bottom_height, freezing_level_height, gr_hid):
-    # Instead of simply using the bright band or freezing level height to partition the VN data
-    # going into Athena, here’s some pseudo-code that uses the HID:
-    # Initialize 2D flag with fpdim, elev (i.e., a matched volume)
-    # Make sure matched volume is below freezing level height
-    # Flag matched volume if it only contains liquid HID types (DZ, RA, BD)
-
-    #                liquid_hid_flag=intarr(fpdim,elev)*0.0 ;initialize 2-D flag to indicate hydrometeor type as liquid (1) or non-liquid (0)
-    # For i=0, fpdim-1 do $
-    # if ( bottomHeight[i] LT (freezing_level[i]-1000 meters) ) do begin ;forget if heights are meters or kilometers
-    # rind =where( total(GR_HID [i,*,0]+GR_HID[i,*,3:9]+GR_HID[I,*,11],  0) EQ 0, rcount) ;sum rain/dz/bd hid bins
-    # if ( rcount gt 0) liquid_hid_flag[fpdim,elev]=1
-    # endif
     liquid_hid_flag = False
+    offset = 1
 #    if (freezing_level_height<0 or bottom_height <0):
 #        liquid_hid_flag = False
     if (freezing_level_height >= 0 and bottom_height >= 0 and bottom_height < (freezing_level_height-1000 )):
-            # sum hid counts that are not liquid (including missing)
-            #cnt = int(gr_hid[0])+int(gr_hid[3]) +int(gr_hid[4]) +int(gr_hid[5]) +int(gr_hid[6]) +int(gr_hid[7]) +int(gr_hid[8]) +int(gr_hid[9]) +int(gr_hid[11])
-            cnt = int(gr_hid[0])+int(gr_hid[3]) +int(gr_hid[4]) +int(gr_hid[5]) +int(gr_hid[6]) +int(gr_hid[7]) +int(gr_hid[8]) +int(gr_hid[9])
+            #Drizzle + Rain + Big Drops, use HID categories defined in radar files
+            # assuming indexing in array starts at zero, subtract offset (one) from categories to get correct index
+            cnt = int(gr_hid[1-offset]) + int(gr_hid[2-offset]) + int(gr_hid[10-offset])
             if cnt > 0:
                 liquid_hid_flag = True
 
@@ -696,11 +685,14 @@ def process_file(filename):
                                 #print("fp_elev_key ",fp_elev_key)
                                 fp_entry[fp_elev_key] = float(ma.getdata(varDict_elev_fpdim[fp_elev_key][elev])[fp])
                             hid_vals=[]
-                            for hid_ind in range(hidim-4): # leave off three spare bins and dropped 'HR' category
-                            #for hid_ind in range(hidim - 3):  # leave off three spare bins
+                            # for hid_ind in range(hidim-4): # leave off three spare bins and dropped 'HR' category
+                            #     hid_val = int(ma.getdata(hid[elev][fp])[hid_ind])
+                            #     #fp_entry["hid_"+str(hid_ind+1)] = int(ma.getdata(hid[elev][fp])[hid_ind])
+                            #     fp_entry["hid_" + str(hid_ind + 1)] = hid_val
+                            #     hid_vals.append(hid_val)
+                            for hid_ind in range(1,hidim-4): # start at index 1 and leave off three spare bins and dropped 'HR' category
                                 hid_val = int(ma.getdata(hid[elev][fp])[hid_ind])
-                                #fp_entry["hid_"+str(hid_ind+1)] = int(ma.getdata(hid[elev][fp])[hid_ind])
-                                fp_entry["hid_" + str(hid_ind + 1)] = hid_val
+                                fp_entry["hid_" + str(hid_ind)] = hid_val
                                 hid_vals.append(hid_val)
                             bottom_ht = (float(ma.getdata(nc.variables['bottomHeight'+add][elev])[fp]) + site_elev) * 1000.0
                             top_ht = (float(ma.getdata(nc.variables['topHeight'+add][elev])[fp]) + site_elev) * 1000.0
