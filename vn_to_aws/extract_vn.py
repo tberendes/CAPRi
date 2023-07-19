@@ -688,7 +688,7 @@ def process_file(filename):
                             for fp_key in varDict_fpdim:
                                 #print("fp_key ",fp_key)
                                 # override specific int values in the dictionary
-                                if fp_key=='BBstatus' or fp_key=='scanNum' or fp_key=='rayNum' or fp_key.startswith('n_'):
+                                if fp_key=='BBstatus' or fp_key=='scanNum' or fp_key=='rayNum':
                                     fp_entry[fp_key] = int(ma.getdata(varDict_fpdim[fp_key])[fp])
                                 else:
                                     fp_entry[fp_key]=float(ma.getdata(varDict_fpdim[fp_key])[fp])
