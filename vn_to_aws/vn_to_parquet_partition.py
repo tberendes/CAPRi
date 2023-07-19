@@ -95,6 +95,11 @@ def main():
                     print("found no precip in file " + file + " skipping...")
                     continue
                 #print(outputJson)
+
+                # special fields for partitions since these get popped out of outputJson
+                site = outputJson[0]['GR_site']
+                year = outputJson[0]['year']
+
                 if 'error' in outputJson:
                     print('skipping file ', file, ' due to processing error...')
                     continue
@@ -131,15 +136,15 @@ def main():
                 json2parquet.write_parquet(parquet_data, parquet_output_file, compression='snappy')
 
                 #write metadata for file
-                metadata = {"site": outputJson[0]["GR_site"],"year":outputJson[0]["year"],"month":outputJson[0]["month"],
+                metadata = {"site": site,"year":year,"month":outputJson[0]["month"],
                             "day":outputJson[0]["day"],"time": outputJson[0]["time"], "site_rainy_count": outputJson[0]["site_rainy_count"],
                             "site_fp_count": outputJson[0]["site_fp_count"],
                             "site_percent_rainy": outputJson[0]["site_percent_rainy"],
-                            "meanBB": outputJson[0]["meanBB"], "have_mrms": have_mrms}
+                            "freezing_level_height": outputJson[0]["freezing_level_height"], "have_mrms": have_mrms}
 
+                os.makedirs(os.path.join(out_path_metadata), exist_ok=True)
                 with open(out_path_metadata + '/' + file + '.meta.json', 'w') as json_file:
                     json.dump(metadata, json_file)
-                json_file.close()
 
                 # save json files for testing
                 if print_json:
