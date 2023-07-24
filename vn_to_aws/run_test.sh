@@ -1,7 +1,13 @@
 #!/bin/bash
+# assume this package is installed in ~/vn_to_aws
+cd ~/vn_to_aws
+# activate pre-installed virtual environment with requirements
 source ./v-env/bin/activate
-#python vn_to_parquet_partition.py /data/gpmgv_test/netcdf/geo_match/GPM/2ADPR/FS_Ku/V07A/2_1 /data/gpmgv_test/aws_athena/parquet /data/gpmgv_test/BB/GPM_rain_event_bb_km.txt 141002 141002
-#
-#python vn_to_parquet_partition.py /data/v7_test/GPM/2ADPR/FS_Ku/V07A/2_3 /data/v7_test/aws/parquet 191002 191002
-python vn_bin_to_png.py /data/v7_test/mrms/netcdf/geo_match/GPM/2ADPR/FS_Ku/V07A/2_3 /data/v7_test/mrms/test 140101 141231
+# run DPR FS_Ku
+# syntax:  python vn_to_parquet_partition.py <path to root of netcdf files> <path to root of output parquet directory> <start YYMMDD> <end YYMMDD>
+# example
+python vn_to_parquet_partition.py /data/gpmgv/netcdf/geo_match/GPM/2ADPR/FS_Ku/V07A/2_4 /data/gpmgv/athena 160101 230630
+# run DPRGMI FS and NS
+# example
+python vn_to_parquet_partition.py /data/gpmgv/netcdf/geo_match/GPM/2BDPRGMI/V07A/2_4 /data/gpmgv/athena 190101 230630
 deactivate

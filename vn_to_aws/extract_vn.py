@@ -661,7 +661,7 @@ def process_file(filename):
                             #     fp_entry["zero_deg_height"] = alt_BB_height
                             #
                             if data_is_dprgmi:
-                                mx = np.ma.masked_invalid(ma.getdata(nc.variables['zeroDegAltitude']))
+                                mx = np.ma.masked_invalid(ma.getdata(nc.variables['zeroDegAltitude' + add]))
                                 if not mx[fp]:
                                     fp_entry['zeroDegAltitude'] = -9999.0
                                 else:

@@ -12,8 +12,7 @@
 #          start and end dates are inclusive
 #
 # ---------------------------------------------------------------------------------------------
-
-
+import copy
 # --Do all the necessary imports
 
 import sys
@@ -100,6 +99,9 @@ def main():
                 site = outputJson[0]['GR_site']
                 year = outputJson[0]['year']
 
+                # use sensor as top level directory since each sensor will use a different database
+                sensor = outputJson[0]['sensor']
+
                 if 'error' in outputJson:
                     print('skipping file ', file, ' due to processing error...')
                     continue
@@ -109,31 +111,83 @@ def main():
                 # need to remove partitioned fields from the final parquet file before writing
                 # delete fields from outputJson
                 # use outputJson.pop("key")
+                if sensor.lower() == 'dprgmi' and 'scan' in fixed_partitions:
+                    # this logic assumes scan is a partition, must split processing for each scan
+                    # only DPRGMI contains multiple scan types in netCDF file
 
-                # set up fixed partitions for this file
-                out_path = OUT_DIR + '/' + 'parquet'
-                out_path_json = OUT_DIR + '/' + 'json'
-                out_path_metadata = OUT_DIR + '/' + 'meta'
-                # use first record to set output path for fixed partitions
-                for partition in fixed_partitions:
-                    out_path=out_path+'/'+partition.lower()+'='+str(outputJson[0][partition])
-                    out_path_json=out_path_json+'/'+partition.lower()+'='+str(outputJson[0][partition])
+                    for scan_to_do in ['FS','NS']:
+                        # set up fixed partitions for this file
+                        out_path = OUT_DIR + '/' + 'parquet' + '/' + sensor.lower()
+                        out_path_json = OUT_DIR + '/' + 'json'
+                        out_path_metadata = OUT_DIR + '/' + 'meta'
+                        # use first record to set output path for fixed partitions
+                        for partition in fixed_partitions:
+                            if partition == 'scan':
+                                out_path = out_path + '/' + partition.lower() + '=' + scan_to_do
+                                out_path_json = out_path_json + '/' + partition.lower() + '=' + scan_to_do
+                            else:
+                                out_path = out_path + '/' + partition.lower() + '=' + str(outputJson[0][partition])
+                                out_path_json = out_path_json + '/' + partition.lower() + '=' + str(outputJson[0][partition])
+                        # need to remove partitioned fields from the final parquet file before writing
+                        # process all records in the file, removing partitions and adding to new output list
+                        outputList = []
 
-                # need to remove partitioned fields from the final parquet file before writing
-                # process all records in the file, removing partitions and adding to new output list
-                outputList = []
-                for record in outputJson:
+                        for record in outputJson:
+                            # use deepcopy because pop affects original outputJson due to reference variable
+                            # in python, since we are reprocessing outputJson for each scan, original must not
+                            # be modified
+                            temp = copy.deepcopy(record)
+                            #print('record ',record)
+                            if record['scan'] == scan_to_do:
+                                for partition in fixed_partitions:
+                                    temp.pop(partition)
+                                outputList.append(temp)
+
+                        parquet_output_file = os.path.join(out_path+'/'+file+'.parquet')
+
+                        parquet_data = json2parquet.ingest_data(outputList)
+                        os.makedirs(os.path.join(out_path), exist_ok=True)
+
+                        # write the final parquet file
+                        json2parquet.write_parquet(parquet_data, parquet_output_file, compression='snappy')
+                        # save json files for testing
+                        if print_json:
+                            json_output_file = os.path.join(out_path_json+'/'+file+'.json')
+                            os.makedirs(os.path.join(out_path_json), exist_ok=True)
+                            with open(json_output_file, 'w') as json_file:
+                                json.dump(outputList, json_file)
+                else:
+                    # set up fixed partitions for this file
+                    out_path = OUT_DIR + '/' + 'parquet' + '/' + sensor.lower()
+                    out_path_json = OUT_DIR + '/' + 'json'
+                    out_path_metadata = OUT_DIR + '/' + 'meta'
+
+                    # use first record to set output path for fixed partitions
                     for partition in fixed_partitions:
-                        record.pop(partition)
-                    outputList.append(record)
+                        out_path=out_path+'/'+partition.lower()+'='+str(outputJson[0][partition])
+                        out_path_json=out_path_json+'/'+partition.lower()+'='+str(outputJson[0][partition])
 
-                parquet_output_file = os.path.join(out_path+'/'+file+'.parquet')
+                    # need to remove partitioned fields from the final parquet file before writing
+                    # process all records in the file, removing partitions and adding to new output list
+                    outputList = []
+                    for record in outputJson:
+                        for partition in fixed_partitions:
+                            record.pop(partition)
+                        outputList.append(record)
 
-                parquet_data = json2parquet.ingest_data(outputList)
-                os.makedirs(os.path.join(out_path), exist_ok=True)
+                    parquet_output_file = os.path.join(out_path+'/'+file+'.parquet')
 
-                # write the final parquet file
-                json2parquet.write_parquet(parquet_data, parquet_output_file, compression='snappy')
+                    parquet_data = json2parquet.ingest_data(outputList)
+                    os.makedirs(os.path.join(out_path), exist_ok=True)
+
+                    # write the final parquet file
+                    json2parquet.write_parquet(parquet_data, parquet_output_file, compression='snappy')
+                    # save json files for testing
+                    if print_json:
+                        json_output_file = os.path.join(out_path_json+'/'+file+'.json')
+                        os.makedirs(os.path.join(out_path_json), exist_ok=True)
+                        with open(json_output_file, 'w') as json_file:
+                            json.dump(outputList, json_file)
 
                 #write metadata for file
                 metadata = {"site": site,"year":year,"month":outputJson[0]["month"],
@@ -142,16 +196,9 @@ def main():
                             "site_percent_rainy": outputJson[0]["site_percent_rainy"],
                             "freezing_level_height": outputJson[0]["freezing_level_height"], "have_mrms": have_mrms}
 
-                os.makedirs(os.path.join(out_path_metadata), exist_ok=True)
-                with open(out_path_metadata + '/' + file + '.meta.json', 'w') as json_file:
+                os.makedirs(os.path.join(out_path_metadata + '/' + site), exist_ok=True)
+                with open(out_path_metadata + '/' + site + '/' + file + '.meta.json', 'w') as json_file:
                     json.dump(metadata, json_file)
-
-                # save json files for testing
-                if print_json:
-                    json_output_file = os.path.join(out_path_json+'/'+file+'.json')
-                    os.makedirs(os.path.join(out_path_json), exist_ok=True)
-                    with open(json_output_file, 'w') as json_file:
-                        json.dump(outputList, json_file)
 
                 #sys.exit()
 
